@@ -134,9 +134,10 @@ public static class UpdateHandler
     {
         while (!cancellationToken.IsCancellationRequested && remoteFileListQueue.TryDequeue(out FileEntry file))
         {
-            if (File.Exists(file.name))
+            var fullPath = Path.GetFullPath(file.name, AppDomain.CurrentDomain.BaseDirectory);
+            if (File.Exists(fullPath))
             {
-                if (!file.md5.Equals(GetMD5HashFromFile(file.name)))
+                if (!file.md5.Equals(GetMD5HashFromFile(fullPath)))
                 {
                     downloadQueue.Enqueue(file);
                     Console.WriteLine(
@@ -167,13 +168,14 @@ public static class UpdateHandler
 
             try
             {
+                var filePath = Path.GetFullPath(file.name, AppDomain.CurrentDomain.BaseDirectory);
                 Console.WriteLine($"Downloading [{file.name}]...");
-                EnsureDirectory(file.name);
+                EnsureDirectory(filePath);
 
                 Uri updateUrl = new Uri(Settings.UpdateUrl + "/file/" + file.name);
 
                 using var responseStream = await client.GetStreamAsync(updateUrl);
-                using var fileStream = File.Create(file.name);
+                using var fileStream = File.Create(filePath);
 
                 byte[] buffer = new byte[81920];
                 int bytesRead;
