@@ -122,11 +122,6 @@ if (settings.EnableRequestLogging)
     });
 }
 
-// Create semaphore for concurrent download limiting
-var downloadSemaphore = settings.MaxConcurrentDownloads > 0
-    ? new SemaphoreSlim(settings.MaxConcurrentDownloads)
-    : null;
-
 // File download middleware - handle /file/* requests
 app.Use(async (context, next) =>
 {
@@ -150,7 +145,7 @@ app.Use(async (context, next) =>
 
         var fullPath = Path.Combine(settings.FilesDirectory, path);
         var normalizedPath = Path.GetFullPath(fullPath);
-        var normalizedFilesDir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(settings.FilesDirectory)) + Path.DirectorySeparatorChar;
+        var normalizedFilesDir = Path.GetFullPath(settings.FilesDirectory);
 
         if (!normalizedPath.StartsWith(normalizedFilesDir, StringComparison.OrdinalIgnoreCase))
         {
@@ -178,35 +173,19 @@ app.Use(async (context, next) =>
             }
         }
 
-        // Wait for a free download slot if concurrent downloads are limited
-        if (downloadSemaphore != null)
-        {
-            try
-            {
-                await downloadSemaphore.WaitAsync(context.RequestAborted);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-        }
-
-        try
-        {
-            logger.LogInformation("Serving file: {Path}", path);
-            // Range processing lets clients resume partial downloads
-            await Results.File(normalizedPath, "application/octet-stream", enableRangeProcessing: true)
-                .ExecuteAsync(context);
-        }
-        finally
-        {
-            downloadSemaphore?.Release();
-        }
+        logger.LogInformation("Serving file: {Path}", path);
+        context.Response.ContentType = "application/octet-stream";
+        await context.Response.SendFileAsync(fullPath);
         return;
     }
 
     await next();
 });
+
+// Create semaphore for concurrent download limiting
+var downloadSemaphore = settings.MaxConcurrentDownloads > 0
+    ? new SemaphoreSlim(settings.MaxConcurrentDownloads)
+    : null;
 
 // Test endpoint
 app.MapGet("/test", () => "Server is working!");
