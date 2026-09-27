@@ -11,36 +11,49 @@ namespace FileUpdaterClient;
 public static class UpdateHandler
 {
     private const int WORKER_COUNT = 2;
+    private const int MAX_ATTEMPTS = 5;
     private static HttpClient client = new();
     private static ConcurrentQueue<FileEntry> downloadQueue = new();
     private static ConcurrentQueue<FileEntry> remoteFileListQueue = new();
     private static MainViewModel data;
     private static double currentMaxProgress;
-    private static Dictionary<string, int> retryMap = new();
+    private static int completedDownloads = 0;
+    private static ConcurrentDictionary<string, int> retryMap = new();
     private static long totalBytesDownloaded = 0;
     private static TimeSpan totalDownloadTime = TimeSpan.Zero;
     private static readonly object downloadStatsLock = new();
     private static DateTime lastUiUpdateTime = DateTime.MinValue;
     private static readonly CancellationTokenSource cancellationSource = new();
     private static readonly CancellationToken cancellationToken = cancellationSource.Token;
+    private static readonly string baseDirectory = Path.GetFullPath(AppDomain.CurrentDomain.BaseDirectory);
 
     public static async Task HandleUpdates(MainViewModel dataModel)
     {
-        client.Timeout = TimeSpan.FromSeconds(5); //Initial connection
         data = dataModel;
-        if (!await GetFileList()) return;
-
-        await StartComparingFiles();
-
-        client = new HttpClient(); //Must have new client for new timeout
-        client.Timeout = TimeSpan.FromMinutes(15); //Download timeout
-        await StartDownloading();
-
-        Dispatcher.UIThread.Post(() => //Ensure the final finished text is queued in case other text updates are already queued, making sure this is the last one ran.
+        try
         {
-            data.Progress = 100;
-            data.ProgressText = Settings.Finished;
-        });
+            client.Timeout = TimeSpan.FromSeconds(5); //Initial connection
+            if (!await GetFileList()) return;
+
+            await StartComparingFiles();
+
+            client = new HttpClient(); //Must have new client for new timeout
+            client.Timeout = TimeSpan.FromMinutes(15); //Download timeout
+            await StartDownloading();
+
+            if (cancellationToken.IsCancellationRequested) return;
+
+            Dispatcher.UIThread.Post(() => //Ensure the final finished text is queued in case other text updates are already queued, making sure this is the last one ran.
+            {
+                data.Progress = 100;
+                data.ProgressText = Settings.Finished;
+            });
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e.ToString());
+            Dispatcher.UIThread.Post(() => data.ErrorMessage = Settings.UnknownError);
+        }
     }
 
     public static void Cancel()
@@ -51,11 +64,24 @@ public static class UpdateHandler
     private static async Task<bool> GetFileList()
     {
         data.ProgressText = Settings.ReqFileList;
-        var response = await client.GetAsync(new Uri(Settings.UpdateUrl));
 
-        if (response.StatusCode == HttpStatusCode.NotFound)
+        HttpResponseMessage response;
+        try
+        {
+            response = await client.GetAsync(new Uri(Settings.UpdateUrl), cancellationToken);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+        {
+            //Server unreachable, refused the connection, or timed out
+            data.ErrorMessage = Settings.ConError;
+            Console.WriteLine(e.Message);
+            return false;
+        }
+
+        if (!response.IsSuccessStatusCode)
         {
             data.ErrorMessage = Settings.ConError;
+            Console.WriteLine($"Server returned {(int)response.StatusCode} for the file list.");
             return false;
         }
 
@@ -70,16 +96,37 @@ public static class UpdateHandler
             }
 
             FileEntry[] fileList = JsonSerializer.Deserialize<FileEntry[]>(json);
+            if (fileList == null)
+            {
+                data.ErrorMessage = Settings.BadData;
+                return false;
+            }
+
             Console.WriteLine(
                 $"Received information for {fileList.Length} files from the server, comparing to local files..");
 
             foreach (var item in fileList)
             {
+                if (item == null || string.IsNullOrEmpty(item.name) || item.md5 == null)
+                    continue;
+
+                if (!TryGetLocalPath(item.name, out _))
+                {
+                    Console.WriteLine($"[{item.name}] points outside the update folder, skipping..");
+                    continue;
+                }
+
                 remoteFileListQueue.Enqueue(item);
             }
 
             data.Progress = 0;
             return true;
+        }
+        catch (JsonException e)
+        {
+            data.ErrorMessage = Settings.BadData;
+            Console.WriteLine(e.Message);
+            return false;
         }
         catch (Exception e)
         {
@@ -124,7 +171,7 @@ public static class UpdateHandler
         var tasks = new List<Task>();
         for (int i = 0; i < WORKER_COUNT; i++)
         {
-            tasks.Add(Task.Run(() => BackgroundWorker_DoWork()));
+            tasks.Add(Task.Run(BackgroundWorker_DoWork));
         }
 
         await Task.WhenAll(tasks);
@@ -134,7 +181,7 @@ public static class UpdateHandler
     {
         while (!cancellationToken.IsCancellationRequested && remoteFileListQueue.TryDequeue(out FileEntry file))
         {
-            var fullPath = Path.GetFullPath(file.name, AppDomain.CurrentDomain.BaseDirectory);
+            TryGetLocalPath(file.name, out var fullPath);
             if (File.Exists(fullPath))
             {
                 if (!file.md5.Equals(GetMD5HashFromFile(fullPath)))
@@ -159,7 +206,7 @@ public static class UpdateHandler
         }
     }
 
-    private static async void BackgroundWorker_DoWork()
+    private static async Task BackgroundWorker_DoWork()
     {
         while (!cancellationToken.IsCancellationRequested && downloadQueue.TryDequeue(out FileEntry file))
         {
@@ -168,27 +215,61 @@ public static class UpdateHandler
 
             try
             {
-                var filePath = Path.GetFullPath(file.name, AppDomain.CurrentDomain.BaseDirectory);
+                TryGetLocalPath(file.name, out var filePath);
                 Console.WriteLine($"Downloading [{file.name}]...");
                 EnsureDirectory(filePath);
 
-                Uri updateUrl = new Uri(Settings.UpdateUrl + "/file/" + file.name);
+                await DownloadFile(file, filePath);
+                if (cancellationToken.IsCancellationRequested)
+                    return;
 
-                using var responseStream = await client.GetStreamAsync(updateUrl);
-                using var fileStream = File.Create(filePath);
+                Interlocked.Increment(ref completedDownloads);
+            }
+            catch (Exception ex)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                    return;
 
+                Console.WriteLine(ex.ToString());
+                int attempts = retryMap.AddOrUpdate(file.name, 1, (_, count) => count + 1);
+
+                if (attempts >= MAX_ATTEMPTS)
+                {
+                    var fname = file.name;
+                    Console.WriteLine($"Failed to download [{file.name}] after {MAX_ATTEMPTS} attempts, skipping..");
+                    Dispatcher.UIThread.Post(() => data.ErrorMessage = string.Format(Settings.FileFailedError, fname));
+                    Interlocked.Increment(ref completedDownloads);
+                }
+                else
+                {
+                    downloadQueue.Enqueue(file);
+                    continue;
+                }
+            }
+
+            // Final UI update after file is done
+            PostDownloadProgress();
+        }
+    }
+
+    //Downloads to a temporary file first so a failed or cancelled download never leaves a partial file in place
+    private static async Task DownloadFile(FileEntry file, string filePath)
+    {
+        var tempPath = filePath + ".part";
+        try
+        {
+            Uri updateUrl = new Uri(Settings.UpdateUrl + "/file/" + file.name);
+
+            using (var responseStream = await client.GetStreamAsync(updateUrl, cancellationToken))
+            using (var fileStream = File.Create(tempPath))
+            {
                 byte[] buffer = new byte[81920];
                 int bytesRead;
-                long fileBytesDownloaded = 0;
                 var sw = Stopwatch.StartNew();
 
-                while ((bytesRead = await responseStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                while ((bytesRead = await responseStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0)
                 {
-                    if (cancellationToken.IsCancellationRequested)
-                        return;
-
-                    await fileStream.WriteAsync(buffer, 0, bytesRead);
-                    fileBytesDownloaded += bytesRead;
+                    await fileStream.WriteAsync(buffer, 0, bytesRead, cancellationToken);
 
                     lock (downloadStatsLock)
                     {
@@ -200,68 +281,53 @@ public static class UpdateHandler
                     if ((DateTime.UtcNow - lastUiUpdateTime).TotalSeconds >= 0.5)
                     {
                         lastUiUpdateTime = DateTime.UtcNow;
-
-                        double avgSpeed;
-                        lock (downloadStatsLock)
-                        {
-                            avgSpeed = totalDownloadTime.TotalSeconds > 0
-                                ? totalBytesDownloaded / totalDownloadTime.TotalSeconds
-                                : 0;
-                        }
-
-                        string speedStr = $"{(avgSpeed / 1024):F2} KB/s";
-                        Dispatcher.UIThread.Post(() =>
-                        {
-                            double progress =
-                                ((currentMaxProgress - downloadQueue.Count) / (double)currentMaxProgress) * 100;
-                            data.Progress = progress;
-                            data.ProgressText = string.Format(Settings.DownloadingFiles,
-                                currentMaxProgress - downloadQueue.Count, currentMaxProgress, speedStr);
-                        });
-
+                        PostDownloadProgress();
                         sw.Restart(); // reset stopwatch for next chunk interval
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                if (!retryMap.TryGetValue(file.name, out int count))
-                    count = 0;
 
-                if (count > 5)
-                {
-                    var fname = file.name;
-                    Console.WriteLine($"Failed to download [{file.name}] after 5 attempts, skipping..");
-                    Dispatcher.UIThread.Post(() => data.ErrorMessage = string.Format(Settings.FileFailedError, fname));
-                    continue;
-                }
-
-                retryMap[file.name] = count + 1;
-                downloadQueue.Enqueue(file);
-                Console.WriteLine(ex.ToString());
-            }
-
-            // Final UI update after file is done
-            double finalAvgSpeed;
-            lock (downloadStatsLock)
-            {
-                finalAvgSpeed = totalDownloadTime.TotalSeconds > 0
-                    ? totalBytesDownloaded / totalDownloadTime.TotalSeconds
-                    : 0;
-            }
-
-            string finalSpeedStr = $"{(finalAvgSpeed / 1024):F2} KB/s";
-            Dispatcher.UIThread.Post(() =>
-            {
-                double progress = ((currentMaxProgress - downloadQueue.Count) / (double)currentMaxProgress) * 100;
-                data.Progress = progress;
-
-                if(progress >= 100 && downloadQueue.Count == 0)
-                    data.ProgressText = Settings.Finished;
-                else
-                    data.ProgressText = string.Format(Settings.DownloadingFiles, currentMaxProgress - downloadQueue.Count, currentMaxProgress, finalSpeedStr);
-            });
+            File.Move(tempPath, filePath, overwrite: true);
         }
+        finally
+        {
+            try
+            {
+                if (File.Exists(tempPath))
+                    File.Delete(tempPath);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Could not remove partial download [{tempPath}]: {e.Message}");
+            }
+        }
+    }
+
+    private static void PostDownloadProgress()
+    {
+        double avgSpeed;
+        lock (downloadStatsLock)
+        {
+            avgSpeed = totalDownloadTime.TotalSeconds > 0
+                ? totalBytesDownloaded / totalDownloadTime.TotalSeconds
+                : 0;
+        }
+
+        string speedStr = $"{(avgSpeed / 1024):F2} KB/s";
+        int completed = Volatile.Read(ref completedDownloads);
+        Dispatcher.UIThread.Post(() =>
+        {
+            data.Progress = (completed / currentMaxProgress) * 100;
+            data.ProgressText = string.Format(Settings.DownloadingFiles, completed, currentMaxProgress, speedStr);
+        });
+    }
+
+    //Resolves a server-provided file name to a local path, rejecting any name that would land outside the client's folder
+    private static bool TryGetLocalPath(string name, out string fullPath)
+    {
+        fullPath = Path.GetFullPath(name, baseDirectory);
+        var root = Path.TrimEndingDirectorySeparator(baseDirectory) + Path.DirectorySeparatorChar;
+        return fullPath.StartsWith(root, OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase);
     }
 
     private static string GetMD5HashFromFile(string fileName)
