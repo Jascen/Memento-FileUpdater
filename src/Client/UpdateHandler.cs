@@ -287,6 +287,12 @@ public static class UpdateHandler
                 }
             }
 
+            //Reject truncated or changed downloads so they are retried instead of replacing the local file
+            var downloadedMd5 = GetMD5HashFromFile(tempPath);
+            if (!file.md5.Equals(downloadedMd5, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException(
+                    $"[{file.name}] hash mismatch after download (expected {file.md5}, got {downloadedMd5})");
+
             File.Move(tempPath, filePath, overwrite: true);
         }
         finally
