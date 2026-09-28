@@ -47,7 +47,7 @@
 
             <CheckBox Content="Attempt to verify files on launch" IsChecked="{Binding VerifyOnLaunch}" />
             <CheckBox Content="Warn when trying to play if verification fails" IsChecked="{Binding WarnIfNotVerified}"
-                      IsVisible="{x:Static config:LauncherConfig.EnableTazUO}" />
+                      IsVisible="{x:Static config:TazUOLauncherConfig.Enabled}" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,10,0,0">
                 <Button Content="Cancel" Classes="dialog secondary" Click="Cancel_Click" IsCancel="True" />
                 <Button Content="Save" Classes="dialog" Click="Save_Click" IsDefault="True" />

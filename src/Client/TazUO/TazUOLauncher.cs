@@ -12,13 +12,10 @@ namespace FileUpdaterClient.TazUO;
 //Installed after the file update. The TazUO launcher keeps itself and the TazUO client up to date from then on.
 public class TazUOLauncher(string installPath) : ILauncherInstaller
 {
-    private const string ReleaseApiUrl = "https://api.github.com/repos/PlayTazUO/TUO-Launcher/releases/latest";
-    private const string LauncherExeName = "TazUOLauncher";
-
-    public string LauncherDirectory => Path.Combine(installPath, LauncherConfig.TazUOLauncherFolder);
+    public string LauncherDirectory => Path.Combine(installPath, TazUOLauncherConfig.InstallFolder);
 
     public string LauncherExecutable => Path.Combine(LauncherDirectory,
-        LauncherExeName + (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : string.Empty));
+        TazUOLauncherConfig.ExecutableName + (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : string.Empty));
 
     public bool IsInstalled => File.Exists(LauncherExecutable);
 
@@ -36,7 +33,7 @@ public class TazUOLauncher(string installPath) : ILauncherInstaller
         if (!IsInstalled)
             await DownloadLauncherAsync(cancellationToken);
 
-        foreach (var profile in LauncherConfig.TazUOProfiles)
+        foreach (var profile in TazUOLauncherConfig.Profiles)
             CreateProfileIfMissing(profile);
     }
 
@@ -47,7 +44,7 @@ public class TazUOLauncher(string installPath) : ILauncherInstaller
 
         //Release assets are named like TazUO-Launcher.win-x64.zip
         var assetSuffix = $".{GetRuntimeId()}.zip";
-        var release = JsonNode.Parse(await client.GetStringAsync(ReleaseApiUrl, cancellationToken));
+        var release = JsonNode.Parse(await client.GetStringAsync(TazUOLauncherConfig.ReleaseApiUrl, cancellationToken));
         var downloadUrl = release?["assets"]?.AsArray()
             .Select(asset => asset?["browser_download_url"]?.GetValue<string>())
             .FirstOrDefault(url => url != null && url.EndsWith(assetSuffix, StringComparison.OrdinalIgnoreCase));
@@ -120,6 +117,3 @@ public class TazUOLauncher(string installPath) : ILauncherInstaller
         return $"{os}-{arch}";
     }
 }
-
-//Id is also the file name TazUO stores the profile under, so keep it stable once released
-public record TazUOProfile(string Id, string Name, string Ip, int Port, string ClientVersion);

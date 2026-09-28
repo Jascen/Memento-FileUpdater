@@ -1,10 +1,9 @@
 using Avalonia.Media;
-using FileUpdaterClient.TazUO;
 
 namespace FileUpdaterClient.Config;
 
-//Build-time configuration for a server's launcher: branding, colors, server address and optional features.
-//On-screen text lives in Strings.cs. Player choices made at runtime live in Preferences.cs.
+//Build-time configuration for a server's launcher: branding, colors, server address and links.
+//TazUO launcher settings live in TazUOLauncherConfig.cs and on-screen text in Strings.cs. Player choices made at runtime live in Preferences.cs.
 public static class LauncherConfig
 {
     public const string Title = "UODiablo";
@@ -30,17 +29,6 @@ public static class LauncherConfig
 
     public const string DefaultInstallFolder = "Client"; //Created next to the updater exe unless the player picks another folder
     public const string AppDataFolder = "UODiablo"; //Per-user folder that remembers the chosen install folder and preferences
-
-    //When false the TazUO launcher is never downloaded and there is no Play Now button, the updater only keeps files up to date
-    public const bool EnableTazUO = true;
-
-    //TazUO launcher is installed into this folder inside the install folder, with these profiles pre-created
-    public const string TazUOLauncherFolder = "TazUO Launcher";
-    public static readonly TazUOProfile[] TazUOProfiles =
-    [
-        new("uodiablo-live", "UODiablo", "127.0.0.1", 2593, "7.0.15.1"),
-        new("uodiablo-test", "UODiablo Test", "127.0.0.1", 2594, "7.0.15.1"),
-    ];
 }
 
 public record NavLink(string Label, string Target)

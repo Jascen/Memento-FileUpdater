@@ -14,7 +14,7 @@ public class MainViewModel : INotifyPropertyChanged
 {
     private IMainView? _view;
     private UpdateService? _updates; //Created once a usable install folder is known
-    private TazUOLauncher? _launcher; //Null when LauncherConfig.EnableTazUO is off
+    private TazUOLauncher? _launcher; //Null when TazUOLauncherConfig.Enabled is off
 
     private string _errorMessage = string.Empty;
     private bool _isDialogOpen;
@@ -121,7 +121,7 @@ public class MainViewModel : INotifyPropertyChanged
     //The center button downloads pending updates first, then becomes the play button
     public string MainButtonText => DownloadsReady ? Strings.DownloadButton : Strings.PlayText;
     public bool MainButtonEnabled => DownloadsReady || CanPlay;
-    public bool MainButtonVisible => DownloadsReady || LauncherConfig.EnableTazUO; //Without TazUO it only appears to download updates
+    public bool MainButtonVisible => DownloadsReady || TazUOLauncherConfig.Enabled; //Without TazUO it only appears to download updates
 
     //Called once the window is open
     public async Task StartAsync(IMainView view)
@@ -144,7 +144,7 @@ public class MainViewModel : INotifyPropertyChanged
     private async Task StartWithFolderAsync()
     {
         var installPath = InstallLocation.Path;
-        _launcher = LauncherConfig.EnableTazUO ? new TazUOLauncher(installPath) : null;
+        _launcher = TazUOLauncherConfig.Enabled ? new TazUOLauncher(installPath) : null;
         _updates = new UpdateService(new FileServerClient(LauncherConfig.UpdateUrl), installPath, _launcher);
         _updates.ProgressChanged += progress => Dispatcher.UIThread.Post(() => ShowProgress(progress));
         _updates.FileProgressChanged += file => Dispatcher.UIThread.Post(() => ShowFileProgress(file));

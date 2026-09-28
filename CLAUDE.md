@@ -19,7 +19,7 @@ SimpleFileUpdater/
 │   │   ├── App.axaml(.cs), Program.cs  # Entry point and application
 │   │   ├── Views/           # Windows and dialogs (MainWindow, SettingsDialog, ConfirmDialog)
 │   │   ├── ViewModels/      # MainViewModel and IMainView
-│   │   ├── Config/          # Build-time config (LauncherConfig) and on-screen text (Strings)
+│   │   ├── Config/          # Build-time config (LauncherConfig, TazUOLauncherConfig) and on-screen text (Strings)
 │   │   ├── UserSettings/    # Player choices saved per user (InstallLocation, Preferences)
 │   │   ├── TazUO/           # TazUO launcher install and start
 │   │   ├── Updating/        # UI-free update logic (server client, file checks, UpdateService)
@@ -108,7 +108,7 @@ The client uses Avalonia UI framework with MVVM pattern:
 - **Main Window**: `Views/MainWindow.axaml(.cs)` → view only. Forwards clicks to the view model and implements `IMainView` (settings/confirm dialogs, opening links, restarting), dimming the launcher while a dialog is open
 - **View Model**: `ViewModels/MainViewModel.cs` → launcher state and actions: startup (install folder, preferences, check on launch), Verify, the center Download/Play button, settings, cancel. Subscribes to `UpdateService` events and posts them to the UI thread
 - **Dialogs**: `Views/SettingsDialog` (install folder + preferences), `ConfirmDialog` (generic yes/no)
-- **Config**: `Config/LauncherConfig.cs` (build-time branding, colors, server URL, links, `EnableTazUO`, TazUO profiles), `Config/Strings.cs` (all on-screen text)
+- **Config**: `Config/LauncherConfig.cs` (build-time branding, colors, server URL, links, folders), `Config/TazUOLauncherConfig.cs` (whether TazUO is used, its release URL, install folder and profiles), `Config/Strings.cs` (all on-screen text)
 - **Player state**: `UserSettings/InstallLocation.cs` (install folder), `UserSettings/Preferences.cs` (settings dialog options), both saved under `%AppData%/<AppDataFolder>/`
 - **TazUO**: `TazUO/TazUOLauncher.cs` → installs the TazUO launcher and its profiles (`ILauncherInstaller`) and starts it
 
@@ -185,13 +185,13 @@ The server is an ASP.NET Core minimal API application with the following compone
 
 ## Customization Points
 
-Branding/configuration is in `src/Client/Config/LauncherConfig.cs` and on-screen text in `src/Client/Config/Strings.cs`:
+Branding/configuration is in `src/Client/Config/LauncherConfig.cs`, TazUO launcher settings in `src/Client/Config/TazUOLauncherConfig.cs`, and on-screen text in `src/Client/Config/Strings.cs`:
 - `Title`, `Subtitle`: Header text
 - `TitleColor`, `SubtitleColor`: Hex color strings for text
 - `DefaultTextColor`, `ProgressBarBackground`: Brush colors
 - `TotalProgressColor` (blue bar, progress across all files), `FileProgressColor` (red bar, current file download)
 - `Links`: Top navigation links (`NavLink(label, url)`); `NavLink.VerifyAction` as the target re-runs the file check
-- `EnableTazUO`: When false, the TazUO launcher is never downloaded, there is no Play Now button, and the play warning option is hidden from Settings
+- `TazUOLauncherConfig.Enabled`: When false, the TazUO launcher is never downloaded, there is no Play Now button, and the play warning option is hidden from Settings
 - `DownloadButton`, `PlayText`: Center button; shows `DownloadButton` while updates are waiting, then `PlayText`, which opens the TazUO launcher once it is installed. If the files weren't fully verified it first asks the player to confirm (`UnverifiedTitle`, `UnverifiedMessage`)
 - Player settings (cog button, modal `SettingsDialog`): install directory (saved by `InstallLocation.cs`; changing it restarts the updater), plus verify files on launch and warn before playing with unverified files (saved to `%AppData%/<AppDataFolder>/settings.json` by `Preferences.cs`)
 - `UpdateUrl`: Server endpoint (must include trailing slash if using path segments)
