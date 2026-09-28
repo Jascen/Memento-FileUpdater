@@ -29,7 +29,7 @@
     </Window.Resources>
 
     <Window.Styles>
-        <!-- Top navigation links: lift, brighten and grow a gold underline from the center on hover -->
+        <!-- Top navigation links: brighten and grow a gold underline from the center on hover -->
         <Style Selector="Button.nav">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Foreground" Value="#E3CF9E" />
@@ -37,11 +37,9 @@
             <Setter Property="FontSize" Value="17" />
             <Setter Property="Padding" Value="14,0" />
             <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="RenderTransform" Value="translateY(0px)" />
             <Setter Property="Transitions">
                 <Transitions>
                     <BrushTransition Property="Foreground" Duration="0:0:0.2" />
-                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2" Easing="CubicEaseOut" />
                 </Transitions>
             </Setter>
             <Setter Property="Template">
@@ -63,13 +61,9 @@
         </Style>
         <Style Selector="Button.nav:pointerover">
             <Setter Property="Foreground" Value="#FFF4D2" />
-            <Setter Property="RenderTransform" Value="translateY(-2px)" />
         </Style>
         <Style Selector="Button.nav:pointerover /template/ Border#Underline">
             <Setter Property="RenderTransform" Value="scaleX(1)" />
-        </Style>
-        <Style Selector="Button.nav:pressed">
-            <Setter Property="RenderTransform" Value="translateY(0px)" />
         </Style>
 
         <!-- Minimize / close / cancel squares -->
