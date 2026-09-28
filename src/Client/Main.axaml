@@ -38,6 +38,9 @@
             </Grid>
         </Grid>
         <StackPanel Orientation="Horizontal" Spacing="8" Canvas.Left="10" Canvas.Bottom="8">
+            <TextBlock Text="{x:Static vm:Settings.InstallDirLabel}" VerticalAlignment="Center" FontSize="12"
+                       IsVisible="{Binding InstallPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       Foreground="{x:Static vm:Settings.DefaultTextColor}" />
             <TextBlock Text="{Binding InstallPath}" VerticalAlignment="Center" FontSize="12"
                        Foreground="{x:Static vm:Settings.DefaultTextColor}" />
             <Button Content="{Binding ChangeFolderText}" Click="ChangeFolder_Click" FontSize="12" Padding="8,2" />
