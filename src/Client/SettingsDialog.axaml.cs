@@ -20,7 +20,7 @@ public partial class SettingsDialog : Window
             WarnIfNotVerified = Preferences.Current.WarnIfNotVerified,
         };
         InstallPathText.Text = _installFolder;
-        ChangeFolderButton.Content = Settings.ChangeFolder;
+        ChangeFolderButton.Content = Strings.ChangeFolder;
     }
 
     //Shows why the current folder can't be used, e.g. when the default folder isn't writable on first launch
@@ -34,7 +34,7 @@ public partial class SettingsDialog : Window
     {
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = Settings.ChooseFolderTitle,
+            Title = Strings.ChooseFolderTitle,
             AllowMultiple = false,
             SuggestedStartLocation = await GetStartFolder(),
         });

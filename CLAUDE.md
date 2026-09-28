@@ -16,11 +16,13 @@ The client downloads only files that differ (by MD5 hash) or are missing, avoidi
 SimpleFileUpdater/
 ├── src/
 │   ├── Client/              # C# .NET client application
-│   │   ├── *.cs             # C# source files
-│   │   ├── *.axaml          # Avalonia XAML UI files
+│   │   ├── *.cs             # App, view model, config and helpers
+│   │   ├── *.axaml          # Avalonia XAML UI files (App, MainWindow, dialogs)
+│   │   ├── Updating/        # UI-free update logic (server client, file checks, UpdateService)
 │   │   ├── *.csproj         # Project file
 │   │   ├── *.sln            # Solution file
 │   │   └── resources/       # Visual assets (background.png, icon.ico)
+│   ├── Client.Tests/        # xUnit tests for the update logic
 │   └── Server/              # C# .NET server application
 │       ├── Program.cs       # Main entry point with endpoints
 │       ├── ServerSettings.cs    # Configuration model
@@ -59,6 +61,12 @@ dotnet publish -c Release -r osx-x64
 
 Output location: `src/Client/bin/Release/net9.0/{runtime}/publish/`
 
+Tests (update logic against an in-memory fake server):
+```bash
+cd src/Client.Tests
+dotnet test
+```
+
 ### Server (C# .NET)
 
 Basic build:
@@ -89,22 +97,26 @@ Output location: `src/Server/bin/Release/net9.0/{runtime}/publish/`
 
 The client uses Avalonia UI framework with MVVM pattern:
 
-- **Entry Point**: `src/Client/Program.cs` → bootstraps Avalonia application
-- **Application Lifecycle**: `src/Client/MainWindow.cs` (Application class) → creates main window (`Main.cs`)
-- **Main Window**: `src/Client/Main.axaml.cs` + `Main.axaml` → initializes `MainViewModel` and triggers `UpdateHandler.HandleUpdates()`
-- **View Model**: `src/Client/MainViewModel.cs` → implements `INotifyPropertyChanged` for data binding (progress, status text, error messages)
-- **Update Logic**: `src/Client/UpdateHandler.cs` → core file synchronization logic
-- **Configuration**: `src/Client/Settings.cs` → all customizable strings, colors, and server URL
+- **Entry Point**: `src/Client/Program.cs` → bootstraps Avalonia with `App`
+- **Application**: `App.axaml(.cs)` → shared styles/brushes, creates `MainViewModel` and `MainWindow`, `App.Restart()`
+- **Main Window**: `MainWindow.axaml(.cs)` → view only. Forwards clicks to the view model and implements `IMainView` (settings/confirm dialogs, opening links, restarting), dimming the launcher while a dialog is open
+- **View Model**: `MainViewModel.cs` → launcher state and actions: startup (install folder, preferences, check on launch), Verify, the center Download/Play button, settings, cancel. Subscribes to `UpdateService` events and posts them to the UI thread
+- **Dialogs**: `SettingsDialog` (install folder + preferences), `ConfirmDialog` (generic yes/no)
+- **Config**: `LauncherConfig.cs` (build-time branding, colors, server URL, links, `EnableTazUO`, TazUO profiles), `Strings.cs` (all on-screen text)
+- **Player state**: `InstallLocation.cs` (install folder), `Preferences.cs` (settings dialog options), both saved under `%AppData%/<AppDataFolder>/`
+- **TazUO**: `TazUOLauncher.cs` → installs the TazUO launcher and its profiles (`ILauncherInstaller`) and starts it
 
-### UpdateHandler Flow
+### Update Logic (`src/Client/Updating/`)
 
-`UpdateHandler.cs` orchestrates the update process in three phases:
+No Avalonia or UI code, so it can be tested on its own:
 
-1. **GetFileList()**: Fetches JSON array of `{name, md5}` from server root endpoint
-2. **StartComparingFiles()**: Spawns `WORKER_COUNT` (2) workers that compare local file MD5s against server MD5s, queuing mismatches/missing files for download
-3. **StartDownloading()**: Runs only after the player clicks the center "Download updates" button (`DownloadUpdates()`); the launch check stops at the first changed or missing file, and the remaining files are compared after the click. Spawns `WORKER_COUNT` (2) workers that download queued files with retry logic (up to 5 attempts per file, with backoff)
-
-All phases use `ConcurrentQueue` for thread-safe work distribution and `Dispatcher.UIThread.Post()` to update UI from background threads.
+- `FileServerClient` → HTTP: fetches the file list (5s timeout) and downloads a file to `.part`, checks its MD5, then moves it into place (15 min timeout). Takes an optional `HttpMessageHandler` so tests can fake the server
+- `LocalFiles` → path safety (`TryGetLocalPath` rejects names outside the install folder), MD5, directory creation
+- `UpdateService` → one instance per install folder:
+  1. **CheckAsync()**: fetches the file list and compares local MD5s with `WORKER_COUNT` (2) workers, stopping at the first difference. Returns `UpdatesReady`, `LauncherReady` (TazUO missing), `Finished`, `Failed` or `Cancelled`; nothing is downloaded
+  2. **DownloadAsync()**: runs after the player clicks "Download updates". Compares the files the check skipped, then downloads with `WORKER_COUNT` workers (up to 5 attempts per file, with backoff), then installs TazUO if enabled
+  - Reports through `ProgressChanged`, `FileProgressChanged` and `ErrorOccurred` events (raised on background threads) and `FilesVerified`
+- `UpdateTypes.cs` → the progress, error and result types and `ILauncherInstaller`
 
 ### Server Architecture
 
@@ -167,7 +179,7 @@ The server is an ASP.NET Core minimal API application with the following compone
 
 ## Customization Points
 
-All branding/configuration is in `src/Client/Settings.cs`:
+Branding/configuration is in `src/Client/LauncherConfig.cs` and on-screen text in `src/Client/Strings.cs`:
 - `Title`, `Subtitle`: Header text
 - `TitleColor`, `SubtitleColor`: Hex color strings for text
 - `DefaultTextColor`, `ProgressBarBackground`: Brush colors
@@ -217,7 +229,7 @@ All server configuration is in `src/Server/settings.ini`:
 ### Threading and Concurrency
 - Uses `WORKER_COUNT = 2` parallel workers for both comparing and downloading
 - `ConcurrentQueue<FileEntry>` for thread-safe file queuing
-- UI updates via `Dispatcher.UIThread.Post()` to marshal to UI thread
+- `UpdateService` raises events on worker threads; `MainViewModel` marshals them with `Dispatcher.UIThread.Post()`
 - Cancellation support via `CancellationToken`
 
 ### File Download Strategy
@@ -229,7 +241,7 @@ All server configuration is in `src/Server/settings.ini`:
 
 ### HTTP Client Configuration
 - Initial connection timeout: 5 seconds (for file list retrieval)
-- Download timeout: 15 minutes (client recreated between phases)
+- Download timeout: 15 minutes (`FileServerClient` keeps one `HttpClient` for each)
 
 ### MD5 Comparison
 - Server computes MD5 on startup and caches in `jsoncache.json`
@@ -239,13 +251,13 @@ All server configuration is in `src/Server/settings.ini`:
 ## Common Development Scenarios
 
 ### Changing Server URL
-Edit `Settings.UpdateUrl` in `src/Client/Settings.cs`. Ensure URL includes protocol and port if non-standard.
+Edit `LauncherConfig.UpdateUrl` in `src/Client/LauncherConfig.cs`. Ensure URL includes protocol and port if non-standard.
 
 ### Adjusting Worker Count
-Modify `WORKER_COUNT` constant in `src/Client/UpdateHandler.cs` (line 13). Higher values increase parallelism but may stress server.
+Modify the `WORKER_COUNT` constant in `src/Client/Updating/UpdateService.cs`. Higher values increase parallelism but may stress server.
 
 ### Modifying UI Text
-All user-facing strings are in `src/Client/Settings.cs`. Messages using format placeholders (`{0}`, `{1}`) correspond to:
+All user-facing strings are in `src/Client/Strings.cs`. Messages using format placeholders (`{0}`, `{1}`) correspond to:
 - `ComparingFiles`: `{0}` = current file count, `{1}` = total files
 - `DownloadingFiles`: `{0}` = current file count, `{1}` = total files, `{2}` = download speed
 

@@ -7,10 +7,10 @@ namespace FileUpdaterClient;
 public static class InstallLocation
 {
     private static readonly string ConfigPath = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), Settings.AppDataFolder, "updater.json");
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), LauncherConfig.AppDataFolder, "updater.json");
 
     //Used until the player picks a folder: a "Client" folder next to the updater exe
-    public static readonly string DefaultPath = System.IO.Path.Combine(AppContext.BaseDirectory, Settings.DefaultInstallFolder);
+    public static readonly string DefaultPath = System.IO.Path.Combine(AppContext.BaseDirectory, LauncherConfig.DefaultInstallFolder);
 
     public static string Path { get; private set; } = DefaultPath;
 
@@ -71,7 +71,7 @@ public static class InstallLocation
         catch (Exception e)
         {
             Console.WriteLine($"Can't use install folder {folder}: {e.Message}");
-            error = string.Format(Settings.FolderNotWritable, folder);
+            error = string.Format(Strings.FolderNotWritable, folder);
             return false;
         }
     }

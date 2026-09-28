@@ -6,7 +6,7 @@ internal class Program
 {
     // This is required by Avalonia
     public static AppBuilder BuildAvaloniaApp()
-        => AppBuilder.Configure<MainWindow>()
+        => AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .WithInterFont()
             .LogToTrace();

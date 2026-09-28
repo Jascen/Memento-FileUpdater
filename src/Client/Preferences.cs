@@ -6,7 +6,7 @@ namespace FileUpdaterClient;
 public class Preferences
 {
     private static readonly string ConfigPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), Settings.AppDataFolder, "settings.json");
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), LauncherConfig.AppDataFolder, "settings.json");
 
     public static Preferences Current { get; private set; } = new();
 

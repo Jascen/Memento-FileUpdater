@@ -22,7 +22,7 @@ SimpleFileUpdater/
 1. Clone the repo
 2. Change `src/Client/resources/background.png` to your own background. The window is 900x675; other sizes are scaled to fill it.
 3. Change `src/Client/resources/icon.ico` to your own icon. Size isn't too important.
-4. Open `src/Client/Settings.cs` and update with your info (title, top links, bar colors).
+4. Open `src/Client/LauncherConfig.cs` and update with your info (title, server URL, top links, bar colors, TazUO), and `src/Client/Strings.cs` to change any on-screen text.
 5. Navigate to the client directory: `cd src/Client`
 6. Run in terminal/command prompt/powershell etc: `dotnet build -c Release`  
 
