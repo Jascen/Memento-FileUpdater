@@ -102,7 +102,7 @@ The client uses Avalonia UI framework with MVVM pattern:
 
 1. **GetFileList()**: Fetches JSON array of `{name, md5}` from server root endpoint
 2. **StartComparingFiles()**: Spawns `WORKER_COUNT` (2) workers that compare local file MD5s against server MD5s, queuing mismatches/missing files for download
-3. **StartDownloading()**: Runs only after the player clicks the "Download updates" button (`DownloadUpdates()`); until then the window shows how many files are ready. Spawns `WORKER_COUNT` (2) workers that download queued files with retry logic (max 5 retries per file)
+3. **StartDownloading()**: Runs only after the player clicks the "Download updates" button (`DownloadUpdates()`); the launch check stops at the first changed or missing file, and the remaining files are compared after the click. Spawns `WORKER_COUNT` (2) workers that download queued files with retry logic (max 5 retries per file)
 
 All phases use `ConcurrentQueue` for thread-safe work distribution and `Dispatcher.UIThread.Post()` to update UI from background threads.
 

@@ -19,6 +19,7 @@ public static class UpdateHandler
     private static double currentMaxProgress;
     private static int completedDownloads = 0;
     private static int downloadStarted = 0;
+    private static volatile bool stopAtFirstDifference;
     private static ConcurrentDictionary<string, int> retryMap = new();
     private static long totalBytesDownloaded = 0;
     private static readonly Stopwatch downloadClock = new(); //Wall-clock time of the download phase, shared by all workers
@@ -35,19 +36,18 @@ public static class UpdateHandler
             client.Timeout = TimeSpan.FromSeconds(5); //Initial connection
             if (!await GetFileList()) return;
 
-            await StartComparingFiles();
+            //Only need to know whether anything changed, the rest is checked when the player clicks download
+            await StartComparingFiles(stopAtFirstDifference: true);
 
             if (cancellationToken.IsCancellationRequested) return;
 
             if (!downloadQueue.IsEmpty || !TazUOSetup.IsInstalled)
             {
-                var fileCount = downloadQueue.Count;
+                var filesChanged = !downloadQueue.IsEmpty;
                 Dispatcher.UIThread.Post(() =>
                 {
                     data.Progress = 0;
-                    data.ProgressText = fileCount > 0
-                        ? string.Format(Settings.UpdatesReady, fileCount)
-                        : Settings.LauncherReady;
+                    data.ProgressText = filesChanged ? Settings.UpdatesReady : Settings.LauncherReady;
                     data.DownloadsReady = true;
                 });
                 return;
@@ -69,6 +69,8 @@ public static class UpdateHandler
         Dispatcher.UIThread.Post(() => data.DownloadsReady = false);
         try
         {
+            await StartComparingFiles(stopAtFirstDifference: false); //Check the files the launch check skipped
+
             client = new HttpClient(); //Must have new client for new timeout
             client.Timeout = TimeSpan.FromMinutes(15); //Download timeout
             await StartDownloading();
@@ -191,10 +193,11 @@ public static class UpdateHandler
         }
     }
 
-    private static async Task StartComparingFiles()
+    private static async Task StartComparingFiles(bool stopAtFirstDifference)
     {
         if (remoteFileListQueue.IsEmpty) return;
 
+        UpdateHandler.stopAtFirstDifference = stopAtFirstDifference;
         currentMaxProgress = remoteFileListQueue.Count;
         Dispatcher.UIThread.Post(() =>
         {
@@ -235,7 +238,9 @@ public static class UpdateHandler
 
     private static void BackgroundWorker_CompareFile()
     {
-        while (!cancellationToken.IsCancellationRequested && remoteFileListQueue.TryDequeue(out FileEntry file))
+        while (!cancellationToken.IsCancellationRequested
+               && !(stopAtFirstDifference && !downloadQueue.IsEmpty)
+               && remoteFileListQueue.TryDequeue(out FileEntry file))
         {
             TryGetLocalPath(file.name, out var fullPath);
             if (File.Exists(fullPath))
