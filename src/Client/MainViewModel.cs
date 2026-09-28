@@ -10,6 +10,8 @@ public class MainViewModel : INotifyPropertyChanged
     private string _titleColor = Settings.TitleColor;
     private string _errorMessage = string.Empty;
     private string _subtitleColor = Settings.SubtitleColor;
+    private string _installPath = string.Empty;
+    private string _changeFolderText = Settings.ChangeFolder;
     private double _progress;
     private double _fileProgress;
     private string _progressText = "Checking for updates..";
@@ -50,6 +52,18 @@ public class MainViewModel : INotifyPropertyChanged
     {
         get => _errorMessage;
         set => SetField(ref _errorMessage, value);
+    }
+
+    public string InstallPath
+    {
+        get => _installPath;
+        set => SetField(ref _installPath, value);
+    }
+
+    public string ChangeFolderText
+    {
+        get => _changeFolderText;
+        set => SetField(ref _changeFolderText, value);
     }
 
     /// <summary>Overall progress across all files (blue bar), 0-100.</summary>
