@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="TestableIO.System.IO.Abstractions.Wrappers" Version="22.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="settings.ini">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

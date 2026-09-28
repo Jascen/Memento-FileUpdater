@@ -122,8 +122,18 @@ FilesDirectory = ./files/
 # Name of the JSON cache file
 CacheFileName = jsoncache.json
 
-# Cache regeneration interval in seconds (default: 3600 = 1 hour)
-# Set to 0 to disable automatic regeneration
+# Rebuild the file list shortly after files are added, changed or removed (default: true)
+WatchFilesDirectory = true
+
+# Seconds to wait for changes to stop before rebuilding the file list (default: 2)
+ChangeDelay = 2
+
+# Seconds a file must go unmodified before it is published (default: 5)
+# Files still being copied in, or open for writing, are left out until they are finished
+FileSettleTime = 5
+
+# Full rebuild interval in seconds, as a fallback to watching (default: 3600 = 1 hour)
+# Set to 0 to disable periodic rebuilds
 CacheRegenerationInterval = 3600
 
 [Security]
@@ -143,16 +153,13 @@ MaxFileSize = 0
 # Minimum log level: Trace, Debug, Information, Warning, Error, Critical
 LogLevel = Information
 
-# Log file path (empty = console only)
+# Log file path, relative to the server (empty = console only)
 LogFilePath =
 
-# Enable request logging (logs every file download request)
+# Log one line per request (default: true)
 EnableRequestLogging = true
 
 [Performance]
-# Buffer size for file streaming in bytes (default: 81920 = 80 KB)
-StreamBufferSize = 81920
-
 # Enable response compression (gzip/brotli)
 EnableCompression = true
 ";

@@ -17,6 +17,10 @@ if (!Path.IsPathRooted(settings.CacheFileName))
 {
     settings.CacheFileName = Path.GetFullPath(Path.Combine(exeDirectory, settings.CacheFileName));
 }
+if (!string.IsNullOrEmpty(settings.LogFilePath) && !Path.IsPathRooted(settings.LogFilePath))
+{
+    settings.LogFilePath = Path.GetFullPath(Path.Combine(exeDirectory, settings.LogFilePath));
+}
 
 // Configure Kestrel server
 builder.WebHost.ConfigureKestrel(options =>
@@ -72,6 +76,10 @@ builder.Logging.AddSimpleConsole(options =>
     options.TimestampFormat = "HH:mm:ss ";
     options.IncludeScopes = false;
 });
+if (!string.IsNullOrEmpty(settings.LogFilePath))
+{
+    builder.Logging.AddProvider(new FileLoggerProvider(settings.LogFilePath));
+}
 
 // Set minimum log level from settings
 if (Enum.TryParse<LogLevel>(settings.LogLevel, ignoreCase: true, out var logLevel))
@@ -135,8 +143,6 @@ app.Use(async (context, next) =>
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
         var path = context.Request.Path.Value?.Substring("/file/".Length) ?? "";
 
-        logger.LogInformation("FILE MIDDLEWARE HIT: path={Path}, FilesDirectory={Dir}", path, settings.FilesDirectory);
-
         // Path traversal protection
         if (settings.EnablePathTraversalProtection)
         {
@@ -193,7 +199,7 @@ app.Use(async (context, next) =>
 
         try
         {
-            logger.LogInformation("Serving file: {Path}", path);
+            logger.LogDebug("Serving file: {Path}", path);
             // Range processing lets clients resume partial downloads
             await Results.File(normalizedPath, "application/octet-stream", enableRangeProcessing: true)
                 .ExecuteAsync(context);
@@ -242,7 +248,12 @@ logger.LogInformation("Port: {Port}", settings.Port);
 logger.LogInformation("Hostname: {Hostname}", string.IsNullOrEmpty(settings.Hostname) ? "All interfaces" : settings.Hostname);
 logger.LogInformation("Files directory: {Dir}", Path.GetFullPath(settings.FilesDirectory));
 logger.LogInformation("Cache file: {Cache}", settings.CacheFileName);
+logger.LogInformation("Watch files directory: {Enabled}", settings.WatchFilesDirectory);
 logger.LogInformation("Cache interval: {Interval} seconds", settings.CacheRegenerationInterval);
+if (!string.IsNullOrEmpty(settings.LogFilePath))
+{
+    logger.LogInformation("Log file: {LogFile}", settings.LogFilePath);
+}
 logger.LogInformation("Max concurrent downloads: {Max}", settings.MaxConcurrentDownloads > 0 ? settings.MaxConcurrentDownloads : "Unlimited");
 logger.LogInformation("Path traversal protection: {Enabled}", settings.EnablePathTraversalProtection);
 logger.LogInformation("Compression: {Enabled}", settings.EnableCompression);

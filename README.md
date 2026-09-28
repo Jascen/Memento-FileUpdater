@@ -49,13 +49,15 @@ SimpleFileUpdater/
 1. Run the server executable (from the publish directory or development build)
 2. On first run, a `settings.ini` file will be created with default settings
 3. A `files/` folder will be created automatically where you place all files you want the client to be able to check/download
-4. After placing your files in the `files/` directory, the cache will regenerate automatically every hour (configurable in settings.ini)
+4. Files you add, change or remove in `files/` show up in the file list a few seconds after they finish copying
 
 ## Configuration (settings.ini)
 The server is fully configurable via `settings.ini`:
 - **Port**: Server port (default: 8080)
 - **FilesDirectory**: Where to serve files from (default: ./files/)
-- **CacheRegenerationInterval**: How often to regenerate the file cache in seconds (default: 3600 = 1 hour)
+- **WatchFilesDirectory**: Rebuild the file list shortly after files change (default: true)
+- **FileSettleTime**: Seconds a file must go unmodified before it is published, so half-copied files are never listed (default: 5)
+- **CacheRegenerationInterval**: Full rebuild interval in seconds, as a fallback to watching (default: 3600 = 1 hour)
 - **MaxConcurrentDownloads**: Limit concurrent downloads (default: 50)
 - **MaxFileSize**: Maximum file size to serve in bytes (default: 0 = unlimited)
 - **EnablePathTraversalProtection**: Security feature to prevent directory traversal attacks (default: true)

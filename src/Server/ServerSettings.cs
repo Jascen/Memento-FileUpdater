@@ -11,6 +11,9 @@ public class ServerSettings
     public string FilesDirectory { get; set; } = "./files/";
     public string CacheFileName { get; set; } = "jsoncache.json";
     public int CacheRegenerationInterval { get; set; } = 3600;
+    public bool WatchFilesDirectory { get; set; } = true;
+    public int ChangeDelay { get; set; } = 2; // seconds of quiet after a change before the list is rebuilt
+    public int FileSettleTime { get; set; } = 5; // seconds a file must go unmodified before it is published
 
     // Security section
     public string CorsAllowedOrigins { get; set; } = "*";
@@ -23,6 +26,5 @@ public class ServerSettings
     public bool EnableRequestLogging { get; set; } = true;
 
     // Performance section
-    public int StreamBufferSize { get; set; } = 81920;
     public bool EnableCompression { get; set; } = true;
 }
