@@ -69,6 +69,7 @@ public class MainViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(CanPlay));
             OnPropertyChanged(nameof(MainButtonText));
             OnPropertyChanged(nameof(MainButtonEnabled));
+            OnPropertyChanged(nameof(MainButtonVisible));
         }
     }
 
@@ -132,6 +133,7 @@ public class MainViewModel : INotifyPropertyChanged
     //The center button downloads pending updates first, then becomes the play button
     public string MainButtonText => DownloadsReady ? Settings.DownloadButton : Settings.PlayText;
     public bool MainButtonEnabled => DownloadsReady || CanPlay;
+    public bool MainButtonVisible => DownloadsReady || Settings.EnableTazUO; //Without TazUO it only appears to download updates
 
     protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {

@@ -30,6 +30,9 @@ public static class Settings
     public const string DefaultInstallFolder = "Client"; //Created next to the updater exe unless the player picks another folder
     public const string AppDataFolder = "UODiablo"; //Per-user folder that remembers the chosen install folder
 
+    //When false the TazUO launcher is never downloaded and there is no Play Now button, the updater only keeps files up to date
+    public const bool EnableTazUO = true;
+
     //TazUO launcher is installed into this folder inside the install folder, with these profiles pre-created
     public const string TazUOLauncherFolder = "TazUO Launcher";
     public static readonly TazUOProfile[] TazUOProfiles =

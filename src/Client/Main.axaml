@@ -206,6 +206,7 @@
                     </TextBlock.Effect>
                 </TextBlock>
                 <Button Classes="play" Content="{Binding MainButtonText}" IsEnabled="{Binding MainButtonEnabled}"
+                        IsVisible="{Binding MainButtonVisible}"
                         HorizontalAlignment="Center" Margin="0,28,0,0" Click="MainButton_Click" />
             </StackPanel>
 

@@ -47,7 +47,7 @@ public static class UpdateHandler
 
             if (cancellationToken.IsCancellationRequested) return;
 
-            if (!downloadQueue.IsEmpty || !TazUOSetup.IsInstalled)
+            if (!downloadQueue.IsEmpty || (Settings.EnableTazUO && !TazUOSetup.IsInstalled))
             {
                 var filesChanged = !downloadQueue.IsEmpty;
                 Dispatcher.UIThread.Post(() =>
@@ -176,7 +176,7 @@ public static class UpdateHandler
 
     private static async Task SetUpTazUO()
     {
-        if (cancellationToken.IsCancellationRequested) return;
+        if (!Settings.EnableTazUO || cancellationToken.IsCancellationRequested) return;
 
         Dispatcher.UIThread.Post(() => data.ProgressText = Settings.InstallingTazUO);
         try
