@@ -1,7 +1,8 @@
 using System.Net;
+using FileUpdaterClient.Tests.Fakes;
 using FileUpdaterClient.Updating;
 
-namespace FileUpdaterClient.Tests;
+namespace FileUpdaterClient.Tests.Updating;
 
 public class UpdateServiceTests : IDisposable
 {
@@ -23,14 +24,21 @@ public class UpdateServiceTests : IDisposable
         File.WriteAllText(path, content);
     }
 
+    private string ReadLocal(string name) => File.ReadAllText(Path.Combine(_installPath, name));
+
     [Fact]
     public async Task CheckFinishesWhenFilesMatch()
     {
+        //Arrange
         _server.Add("a.mul", "same");
         WriteLocal("a.mul", "same");
-
         var service = CreateService();
-        Assert.Equal(UpdateResult.Finished, await service.CheckAsync());
+
+        //Act
+        var result = await service.CheckAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result);
         Assert.True(service.FilesVerified);
         Assert.Empty(_server.Downloads);
     }
@@ -38,11 +46,16 @@ public class UpdateServiceTests : IDisposable
     [Fact]
     public async Task CheckReportsUpdatesWithoutDownloading()
     {
+        //Arrange
         _server.Add("a.mul", "new");
         WriteLocal("a.mul", "old");
-
         var service = CreateService();
-        Assert.Equal(UpdateResult.UpdatesReady, await service.CheckAsync());
+
+        //Act
+        var result = await service.CheckAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.UpdatesReady, result);
         Assert.False(service.FilesVerified);
         Assert.Empty(_server.Downloads);
     }
@@ -50,28 +63,37 @@ public class UpdateServiceTests : IDisposable
     [Fact]
     public async Task DownloadReplacesChangedAndMissingFiles()
     {
+        //Arrange
         _server.Add("a.mul", "new");
         _server.Add("maps/b.mul", "missing");
         WriteLocal("a.mul", "old");
-
         var service = CreateService();
         await service.CheckAsync();
-        Assert.Equal(UpdateResult.Finished, await service.DownloadAsync());
 
+        //Act
+        var result = await service.DownloadAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result);
         Assert.True(service.FilesVerified);
-        Assert.Equal("new", File.ReadAllText(Path.Combine(_installPath, "a.mul")));
-        Assert.Equal("missing", File.ReadAllText(Path.Combine(_installPath, "maps", "b.mul")));
+        Assert.Equal("new", ReadLocal("a.mul"));
+        Assert.Equal("missing", ReadLocal(Path.Combine("maps", "b.mul")));
     }
 
     [Fact]
     public async Task DownloadRetriesFailedFiles()
     {
+        //Arrange
         _server.Add("a.mul", "new");
         _server.FailuresBeforeSuccess = 1;
-
         var service = CreateService();
         await service.CheckAsync();
-        Assert.Equal(UpdateResult.Finished, await service.DownloadAsync());
+
+        //Act
+        var result = await service.DownloadAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result);
         Assert.Equal(2, _server.Downloads.Count);
         Assert.True(service.FilesVerified);
     }
@@ -79,71 +101,122 @@ public class UpdateServiceTests : IDisposable
     [Fact]
     public async Task ServerErrorFailsTheCheck()
     {
+        //Arrange
         _server.ListStatus = HttpStatusCode.InternalServerError;
         var errors = new List<UpdateErrorInfo>();
-
         var service = CreateService();
         service.ErrorOccurred += errors.Add;
-        Assert.Equal(UpdateResult.Failed, await service.CheckAsync());
+
+        //Act
+        var result = await service.CheckAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Failed, result);
         Assert.Equal(UpdateError.ConnectionFailed, Assert.Single(errors).Error);
     }
 
     [Fact]
     public async Task MalformedListIsBadData()
     {
+        //Arrange
         _server.RawList = "not json";
         var errors = new List<UpdateErrorInfo>();
-
         var service = CreateService();
         service.ErrorOccurred += errors.Add;
-        Assert.Equal(UpdateResult.Failed, await service.CheckAsync());
+
+        //Act
+        var result = await service.CheckAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Failed, result);
         Assert.Equal(UpdateError.BadData, Assert.Single(errors).Error);
     }
 
     [Fact]
     public async Task NamesOutsideInstallFolderAreSkipped()
     {
+        //Arrange
         _server.RawList = $$"""[{"name":"../evil.txt","md5":"{{FakeServer.Md5("x")}}"}]""";
-
         var service = CreateService();
-        Assert.Equal(UpdateResult.Finished, await service.CheckAsync());
+
+        //Act
+        var result = await service.CheckAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result);
         Assert.Empty(_server.Downloads);
     }
 
     [Fact]
-    public async Task MissingLauncherIsReportedThenInstalled()
+    public async Task CheckReportsMissingLauncher()
     {
+        //Arrange
         _server.Add("a.mul", "same");
         WriteLocal("a.mul", "same");
         var launcher = new FakeLauncher();
-
         var service = CreateService(launcher);
-        Assert.Equal(UpdateResult.LauncherReady, await service.CheckAsync());
-        Assert.Equal(UpdateResult.Finished, await service.DownloadAsync());
+
+        //Act
+        var result = await service.CheckAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.LauncherReady, result);
+        Assert.False(launcher.IsInstalled);
+    }
+
+    [Fact]
+    public async Task DownloadInstallsMissingLauncher()
+    {
+        //Arrange
+        _server.Add("a.mul", "same");
+        WriteLocal("a.mul", "same");
+        var launcher = new FakeLauncher();
+        var service = CreateService(launcher);
+        await service.CheckAsync();
+
+        //Act
+        var result = await service.DownloadAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result);
         Assert.True(launcher.IsInstalled);
     }
 
     [Fact]
-    public async Task CancelledCheckStartsFromAFreshFileList()
+    public async Task CancelledCheckReturnsCancelled()
     {
+        //Arrange
         _server.Add("a.mul", "new");
         var service = CreateService();
         service.ProgressChanged += _ => service.Cancel(); //Cancel as soon as the check starts
 
-        Assert.Equal(UpdateResult.Cancelled, await service.CheckAsync());
+        //Act
+        var result = await service.CheckAsync();
 
-        var fresh = CreateService();
-        Assert.Equal(UpdateResult.UpdatesReady, await fresh.CheckAsync());
+        //Assert
+        Assert.Equal(UpdateResult.Cancelled, result);
+        Assert.Empty(_server.Downloads);
     }
 
-    private class FakeLauncher : ILauncherInstaller
+    [Fact]
+    public async Task DownloadAfterCancelledCheckFetchesAFreshFileList()
     {
-        public bool IsInstalled { get; private set; }
-
-        public Task EnsureInstalledAsync(CancellationToken cancellationToken)
+        //Arrange
+        _server.Add("a.mul", "new");
+        var service = CreateService();
+        void CancelOnce(UpdateProgress _)
         {
-            IsInstalled = true;
-            return Task.CompletedTask;
+            service.ProgressChanged -= CancelOnce;
+            service.Cancel();
         }
+        service.ProgressChanged += CancelOnce;
+        await service.CheckAsync();
+
+        //Act
+        var result = await service.DownloadAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result);
+        Assert.Equal("new", ReadLocal("a.mul"));
     }
 }

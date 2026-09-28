@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
-namespace FileUpdaterClient.Tests;
+namespace FileUpdaterClient.Tests.Fakes;
 
 //Serves a file list and file contents from memory, like the real update server
 public class FakeServer : HttpMessageHandler

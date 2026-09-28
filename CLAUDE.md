@@ -16,13 +16,17 @@ The client downloads only files that differ (by MD5 hash) or are missing, avoidi
 SimpleFileUpdater/
 ├── src/
 │   ├── Client/              # C# .NET client application
-│   │   ├── *.cs             # App, view model, config and helpers
-│   │   ├── *.axaml          # Avalonia XAML UI files (App, MainWindow, dialogs)
+│   │   ├── App.axaml(.cs), Program.cs  # Entry point and application
+│   │   ├── Views/           # Windows and dialogs (MainWindow, SettingsDialog, ConfirmDialog)
+│   │   ├── ViewModels/      # MainViewModel and IMainView
+│   │   ├── Config/          # Build-time config (LauncherConfig) and on-screen text (Strings)
+│   │   ├── UserSettings/    # Player choices saved per user (InstallLocation, Preferences)
+│   │   ├── TazUO/           # TazUO launcher install and start
 │   │   ├── Updating/        # UI-free update logic (server client, file checks, UpdateService)
+│   │   ├── Assets/          # Visual assets (background.png, icon.ico)
 │   │   ├── *.csproj         # Project file
-│   │   ├── *.sln            # Solution file
-│   │   └── resources/       # Visual assets (background.png, icon.ico)
-│   ├── Client.Tests/        # xUnit tests for the update logic
+│   │   └── *.sln            # Solution file
+│   ├── Client.Tests/        # xUnit tests for the update logic (Updating/, plus Fakes/ for the fake server and launcher)
 │   └── Server/              # C# .NET server application
 │       ├── Program.cs       # Main entry point with endpoints
 │       ├── ServerSettings.cs    # Configuration model
@@ -67,6 +71,8 @@ cd src/Client.Tests
 dotnet test
 ```
 
+Each test is split into `//Arrange`, `//Act` and `//Assert` sections, with one action under `//Act` (tests with nothing to set up skip `//Arrange`).
+
 ### Server (C# .NET)
 
 Basic build:
@@ -99,12 +105,12 @@ The client uses Avalonia UI framework with MVVM pattern:
 
 - **Entry Point**: `src/Client/Program.cs` → bootstraps Avalonia with `App`
 - **Application**: `App.axaml(.cs)` → shared styles/brushes, creates `MainViewModel` and `MainWindow`, `App.Restart()`
-- **Main Window**: `MainWindow.axaml(.cs)` → view only. Forwards clicks to the view model and implements `IMainView` (settings/confirm dialogs, opening links, restarting), dimming the launcher while a dialog is open
-- **View Model**: `MainViewModel.cs` → launcher state and actions: startup (install folder, preferences, check on launch), Verify, the center Download/Play button, settings, cancel. Subscribes to `UpdateService` events and posts them to the UI thread
-- **Dialogs**: `SettingsDialog` (install folder + preferences), `ConfirmDialog` (generic yes/no)
-- **Config**: `LauncherConfig.cs` (build-time branding, colors, server URL, links, `EnableTazUO`, TazUO profiles), `Strings.cs` (all on-screen text)
-- **Player state**: `InstallLocation.cs` (install folder), `Preferences.cs` (settings dialog options), both saved under `%AppData%/<AppDataFolder>/`
-- **TazUO**: `TazUOLauncher.cs` → installs the TazUO launcher and its profiles (`ILauncherInstaller`) and starts it
+- **Main Window**: `Views/MainWindow.axaml(.cs)` → view only. Forwards clicks to the view model and implements `IMainView` (settings/confirm dialogs, opening links, restarting), dimming the launcher while a dialog is open
+- **View Model**: `ViewModels/MainViewModel.cs` → launcher state and actions: startup (install folder, preferences, check on launch), Verify, the center Download/Play button, settings, cancel. Subscribes to `UpdateService` events and posts them to the UI thread
+- **Dialogs**: `Views/SettingsDialog` (install folder + preferences), `ConfirmDialog` (generic yes/no)
+- **Config**: `Config/LauncherConfig.cs` (build-time branding, colors, server URL, links, `EnableTazUO`, TazUO profiles), `Config/Strings.cs` (all on-screen text)
+- **Player state**: `UserSettings/InstallLocation.cs` (install folder), `UserSettings/Preferences.cs` (settings dialog options), both saved under `%AppData%/<AppDataFolder>/`
+- **TazUO**: `TazUO/TazUOLauncher.cs` → installs the TazUO launcher and its profiles (`ILauncherInstaller`) and starts it
 
 ### Update Logic (`src/Client/Updating/`)
 
@@ -179,7 +185,7 @@ The server is an ASP.NET Core minimal API application with the following compone
 
 ## Customization Points
 
-Branding/configuration is in `src/Client/LauncherConfig.cs` and on-screen text in `src/Client/Strings.cs`:
+Branding/configuration is in `src/Client/Config/LauncherConfig.cs` and on-screen text in `src/Client/Config/Strings.cs`:
 - `Title`, `Subtitle`: Header text
 - `TitleColor`, `SubtitleColor`: Hex color strings for text
 - `DefaultTextColor`, `ProgressBarBackground`: Brush colors
@@ -193,8 +199,8 @@ Branding/configuration is in `src/Client/LauncherConfig.cs` and on-screen text i
 - Error messages: `ConError`, `BadData`, `UnknownError`, `FileFailedError`
 
 Visual assets:
-- `src/Client/resources/background.png`: Background image (window is 900x675, borderless)
-- `src/Client/resources/icon.ico`: Application icon
+- `src/Client/Assets/background.png`: Background image (window is 900x675, borderless)
+- `src/Client/Assets/icon.ico`: Application icon
 
 ### Server Configuration
 
@@ -251,13 +257,13 @@ All server configuration is in `src/Server/settings.ini`:
 ## Common Development Scenarios
 
 ### Changing Server URL
-Edit `LauncherConfig.UpdateUrl` in `src/Client/LauncherConfig.cs`. Ensure URL includes protocol and port if non-standard.
+Edit `LauncherConfig.UpdateUrl` in `src/Client/Config/LauncherConfig.cs`. Ensure URL includes protocol and port if non-standard.
 
 ### Adjusting Worker Count
 Modify the `WORKER_COUNT` constant in `src/Client/Updating/UpdateService.cs`. Higher values increase parallelism but may stress server.
 
 ### Modifying UI Text
-All user-facing strings are in `src/Client/Strings.cs`. Messages using format placeholders (`{0}`, `{1}`) correspond to:
+All user-facing strings are in `src/Client/Config/Strings.cs`. Messages using format placeholders (`{0}`, `{1}`) correspond to:
 - `ComparingFiles`: `{0}` = current file count, `{1}` = total files
 - `DownloadingFiles`: `{0}` = current file count, `{1}` = total files, `{2}` = download speed
 

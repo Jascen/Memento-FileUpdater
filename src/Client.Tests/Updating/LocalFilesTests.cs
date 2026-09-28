@@ -1,7 +1,8 @@
 using System.Text.Json;
+using FileUpdaterClient.Tests.Fakes;
 using FileUpdaterClient.Updating;
 
-namespace FileUpdaterClient.Tests;
+namespace FileUpdaterClient.Tests.Updating;
 
 public class LocalFilesTests
 {
@@ -12,7 +13,11 @@ public class LocalFilesTests
     [InlineData("maps/map0.mul")]
     public void AcceptsPathsInsideInstallFolder(string name)
     {
-        Assert.True(LocalFiles.TryGetLocalPath(Root, name, out var path));
+        //Act
+        var accepted = LocalFiles.TryGetLocalPath(Root, name, out var path);
+
+        //Assert
+        Assert.True(accepted);
         Assert.StartsWith(Root, path);
     }
 
@@ -22,23 +27,46 @@ public class LocalFilesTests
     [InlineData("/etc/passwd")]
     public void RejectsPathsOutsideInstallFolder(string name)
     {
-        Assert.False(LocalFiles.TryGetLocalPath(Root, name, out _));
+        //Act
+        var accepted = LocalFiles.TryGetLocalPath(Root, name, out _);
+
+        //Assert
+        Assert.False(accepted);
     }
 
     [Fact]
     public void ComputesLowercaseMd5()
     {
+        //Arrange
         var file = Path.GetTempFileName();
         File.WriteAllText(file, "hello");
-        Assert.Equal(FakeServer.Md5("hello"), LocalFiles.ComputeMd5(file));
-        File.Delete(file);
+
+        try
+        {
+            //Act
+            var md5 = LocalFiles.ComputeMd5(file);
+
+            //Assert
+            Assert.Equal(FakeServer.Md5("hello"), md5);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
     }
 
     [Fact]
     public void FileEntryReadsServerJson()
     {
-        var entries = JsonSerializer.Deserialize<FileEntry[]>("""[{"name":"a.mul","md5":"abc"}]""")!;
-        Assert.Equal("a.mul", entries[0].Name);
-        Assert.Equal("abc", entries[0].Md5);
+        //Arrange
+        const string json = """[{"name":"a.mul","md5":"abc"}]""";
+
+        //Act
+        var entries = JsonSerializer.Deserialize<FileEntry[]>(json)!;
+
+        //Assert
+        var entry = Assert.Single(entries);
+        Assert.Equal("a.mul", entry.Name);
+        Assert.Equal("abc", entry.Md5);
     }
 }
