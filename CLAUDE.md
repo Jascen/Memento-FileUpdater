@@ -170,13 +170,17 @@ The server is an ASP.NET Core minimal API application with the following compone
 All branding/configuration is in `src/Client/Settings.cs`:
 - `Title`, `Subtitle`: Header text
 - `TitleColor`, `SubtitleColor`: Hex color strings for text
-- `DefaultTextColor`, `ProgressBarBackground`, `ProgressBarForeground`: Brush colors
+- `DefaultTextColor`, `ProgressBarBackground`: Brush colors
+- `TotalProgressColor` (blue bar, progress across all files), `FileProgressColor` (red bar, current file download)
+- `Links`: Top navigation links (`NavLink(label, url)`); `NavLink.VerifyAction` as the target re-runs the file check
+- `PrivacyPolicyText`, `PrivacyPolicyUrl`: Bottom-right link (hidden when url is empty)
+- `PlayText`, `GameExecutable`: Play button; launches `GameExecutable` (relative to the launcher) once updates finish
 - `UpdateUrl`: Server endpoint (must include trailing slash if using path segments)
 - `Finished`, `ReqFileList`, `ComparingFiles`, `DownloadingFiles`: Status messages (support `string.Format` placeholders)
 - Error messages: `ConError`, `BadData`, `UnknownError`, `FileFailedError`
 
 Visual assets:
-- `src/Client/resources/background.png`: 800x450 background image
+- `src/Client/resources/background.png`: Background image (window is 900x675, borderless)
 - `src/Client/resources/icon.ico`: Application icon
 
 ### Server Configuration
