@@ -2,8 +2,11 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Avalonia.Threading;
 using FileUpdaterClient.Updating;
+using FileUpdaterClient.Config;
+using FileUpdaterClient.TazUO;
+using FileUpdaterClient.UserSettings;
 
-namespace FileUpdaterClient;
+namespace FileUpdaterClient.ViewModels;
 
 //Launcher state and actions. The window forwards clicks here and shows what these properties say.
 //UpdateService reports from background threads, so its events are posted to the UI thread before touching properties.

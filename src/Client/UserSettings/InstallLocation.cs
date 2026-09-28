@@ -1,6 +1,7 @@
 using System.Text.Json;
+using FileUpdaterClient.Config;
 
-namespace FileUpdaterClient;
+namespace FileUpdaterClient.UserSettings;
 
 //The folder the game files are installed into: a "Client" folder next to the exe unless the player picked another one.
 //Saved per user (e.g. %AppData%/UODiablo/updater.json) so it survives moving or re-downloading the updater.

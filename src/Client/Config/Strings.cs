@@ -1,4 +1,4 @@
-namespace FileUpdaterClient;
+namespace FileUpdaterClient.Config;
 
 //Every message the player sees. Messages with {0}-style placeholders are filled in with string.Format.
 public static class Strings

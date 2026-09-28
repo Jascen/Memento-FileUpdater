@@ -1,8 +1,10 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using FileUpdaterClient.Config;
+using FileUpdaterClient.UserSettings;
 
-namespace FileUpdaterClient;
+namespace FileUpdaterClient.Views;
 
 //Edits a copy of the saved preferences and install folder so Cancel leaves them untouched.
 //ShowDialog<string?> returns the newly picked install folder when the player saves a different one, otherwise null

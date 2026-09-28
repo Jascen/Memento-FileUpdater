@@ -3,9 +3,10 @@ using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using FileUpdaterClient.Config;
 using FileUpdaterClient.Updating;
 
-namespace FileUpdaterClient;
+namespace FileUpdaterClient.TazUO;
 
 //Installs the TazUO launcher next to the game files, gives it ready-made profiles for our shard, and starts it.
 //Installed after the file update. The TazUO launcher keeps itself and the TazUO client up to date from then on.

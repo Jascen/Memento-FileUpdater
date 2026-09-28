@@ -5,8 +5,9 @@
         mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="675"
         Width="900" Height="675" CanResize="False"
         SystemDecorations="None" WindowStartupLocation="CenterScreen"
-        xmlns:vm="using:FileUpdaterClient" Background="#141110"
-        x:Class="FileUpdaterClient.MainWindow" x:DataType="vm:MainViewModel"
+        xmlns:vm="using:FileUpdaterClient.ViewModels"
+        xmlns:config="using:FileUpdaterClient.Config" Background="#141110"
+        x:Class="FileUpdaterClient.Views.MainWindow" x:DataType="vm:MainViewModel"
         PointerPressed="Window_PointerPressed">
 
     <Window.Styles>
@@ -119,11 +120,11 @@
             <Setter Property="CornerRadius" Value="11" />
             <Setter Property="Minimum" Value="0" />
             <Setter Property="Maximum" Value="100" />
-            <Setter Property="Background" Value="{x:Static vm:LauncherConfig.ProgressBarBackground}" />
+            <Setter Property="Background" Value="{x:Static config:LauncherConfig.ProgressBarBackground}" />
         </Style>
         <Style Selector="TextBlock.barText">
             <Setter Property="FontSize" Value="12" />
-            <Setter Property="Foreground" Value="{x:Static vm:LauncherConfig.DefaultTextColor}" />
+            <Setter Property="Foreground" Value="{x:Static config:LauncherConfig.DefaultTextColor}" />
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
@@ -136,7 +137,7 @@
 
     <Grid>
         <!-- Art -->
-        <Image Source="avares://FileUpdaterClient/resources/background.png" Stretch="UniformToFill" />
+        <Image Source="avares://FileUpdaterClient/Assets/background.png" Stretch="UniformToFill" />
 
         <!-- Darken the edges and the top/bottom bands so text and controls stay readable over any art -->
         <Border IsHitTestVisible="False">
@@ -169,7 +170,7 @@
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="vm:NavLink">
+                        <DataTemplate DataType="config:NavLink">
                             <Button Classes="nav" Content="{Binding Label}" Click="NavLink_Click" />
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
@@ -236,13 +237,13 @@
                             <StackPanel Spacing="4">
                                 <Grid>
                                     <ProgressBar Classes="bar" Value="{Binding Progress}"
-                                                 Foreground="{x:Static vm:LauncherConfig.TotalProgressColor}" />
+                                                 Foreground="{x:Static config:LauncherConfig.TotalProgressColor}" />
                                     <Border CornerRadius="11" Background="{StaticResource BarGlossBrush}" IsHitTestVisible="False" />
                                     <TextBlock Classes="barText" Text="{Binding ProgressText}" />
                                 </Grid>
                                 <Grid>
                                     <ProgressBar Classes="bar" Value="{Binding FileProgress}"
-                                                 Foreground="{x:Static vm:LauncherConfig.FileProgressColor}" />
+                                                 Foreground="{x:Static config:LauncherConfig.FileProgressColor}" />
                                     <Border CornerRadius="11" Background="{StaticResource BarGlossBrush}" IsHitTestVisible="False" />
                                     <TextBlock Classes="barText" Text="{Binding FileProgressText}" />
                                 </Grid>

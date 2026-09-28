@@ -1,6 +1,7 @@
 using Avalonia.Media;
+using FileUpdaterClient.TazUO;
 
-namespace FileUpdaterClient;
+namespace FileUpdaterClient.Config;
 
 //Build-time configuration for a server's launcher: branding, colors, server address and optional features.
 //On-screen text lives in Strings.cs. Player choices made at runtime live in Preferences.cs.

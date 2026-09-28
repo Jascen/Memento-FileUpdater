@@ -1,4 +1,4 @@
-namespace FileUpdaterClient;
+namespace FileUpdaterClient.ViewModels;
 
 //What MainViewModel needs from the window: dialogs, opening links, and restarting the app
 public interface IMainView

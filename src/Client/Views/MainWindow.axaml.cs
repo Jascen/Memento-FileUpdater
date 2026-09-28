@@ -1,8 +1,10 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using FileUpdaterClient.Config;
+using FileUpdaterClient.ViewModels;
 
-namespace FileUpdaterClient;
+namespace FileUpdaterClient.Views;
 
 //View only: forwards clicks to MainViewModel and provides the dialogs, links and restart it asks for
 public partial class MainWindow : Window, IMainView

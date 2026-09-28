@@ -2,6 +2,8 @@ using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using FileUpdaterClient.ViewModels;
+using FileUpdaterClient.Views;
 
 namespace FileUpdaterClient;
 
