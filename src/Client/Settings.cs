@@ -40,7 +40,6 @@ public static class Settings
     public const string ChooseFolderTitle = "Choose where to install UODiablo";
     public const string NoFolderChosen = "Choose an install folder to continue.";
     public const string FolderNotWritable = "Can't write to {0}, please choose another folder."; //{0} = folder
-    public const string InstallDirLabel = "Install Dir:";
     public const string ChangeFolder = "Change";
     public const string ChooseFolder = "Choose install folder";
     public const string FileFailedError = "Failed to download [{0}] after several attempts, skipping.."; //{0} = file name
