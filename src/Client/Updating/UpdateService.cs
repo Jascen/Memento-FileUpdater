@@ -13,6 +13,7 @@ public class UpdateService
     private static readonly TimeSpan ProgressInterval = TimeSpan.FromSeconds(0.5);
 
     private readonly FileServerClient _server;
+    private readonly LocalFiles _localFiles;
     private readonly string _installPath;
     private readonly ILauncherInstaller? _launcher;
 
@@ -37,9 +38,10 @@ public class UpdateService
     public bool FilesVerified { get; private set; }
 
     //launcher is null when the TazUO launcher is turned off
-    public UpdateService(FileServerClient server, string installPath, ILauncherInstaller? launcher)
+    public UpdateService(FileServerClient server, LocalFiles localFiles, string installPath, ILauncherInstaller? launcher)
     {
         _server = server;
+        _localFiles = localFiles;
         _installPath = installPath;
         _launcher = launcher;
     }
@@ -171,9 +173,9 @@ public class UpdateService
                && _toCompare.TryDequeue(out var file))
         {
             LocalFiles.TryGetLocalPath(_installPath, file.Name, out var fullPath);
-            if (File.Exists(fullPath))
+            if (_localFiles.Exists(fullPath))
             {
-                if (!file.Md5.Equals(LocalFiles.ComputeMd5(fullPath), StringComparison.OrdinalIgnoreCase))
+                if (!file.Md5.Equals(_localFiles.ComputeMd5(fullPath), StringComparison.OrdinalIgnoreCase))
                 {
                     _toDownload.Enqueue(file);
                     Console.WriteLine($"[{file.Name}] does not match the version from the server, queued for download..");
@@ -225,7 +227,7 @@ public class UpdateService
             {
                 try
                 {
-                    LocalFiles.EnsureDirectory(filePath);
+                    _localFiles.EnsureDirectory(filePath);
                     await _server.DownloadFileAsync(file, filePath,
                         (chunk, fileBytes, fileLength) => OnBytesDownloaded(file.Name, chunk, fileBytes, fileLength), token);
                     break;

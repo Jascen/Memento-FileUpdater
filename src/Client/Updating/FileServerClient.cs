@@ -12,13 +12,15 @@ public class FileServerClient
 {
     private const int BufferSize = 81920;
     private readonly string _baseUrl;
+    private readonly LocalFiles _localFiles;
     private readonly HttpClient _listClient;
     private readonly HttpClient _downloadClient;
 
     //handler lets tests supply a fake server
-    public FileServerClient(string baseUrl, HttpMessageHandler? handler = null)
+    public FileServerClient(string baseUrl, LocalFiles localFiles, HttpMessageHandler? handler = null)
     {
         _baseUrl = baseUrl;
+        _localFiles = localFiles;
         handler ??= new SocketsHttpHandler();
         _listClient = new HttpClient(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(5) }; //Initial connection
         _downloadClient = new HttpClient(handler, disposeHandler: false) { Timeout = TimeSpan.FromMinutes(15) }; //Download timeout
@@ -98,7 +100,7 @@ public class FileServerClient
             long fileBytesDownloaded = 0;
 
             using (var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken))
-            using (var fileStream = File.Create(tempPath))
+            using (var fileStream = _localFiles.Create(tempPath))
             {
                 byte[] buffer = new byte[BufferSize];
                 int bytesRead;
@@ -112,19 +114,18 @@ public class FileServerClient
             }
 
             //Reject truncated or changed downloads so they are retried instead of replacing the local file
-            var downloadedMd5 = LocalFiles.ComputeMd5(tempPath);
+            var downloadedMd5 = _localFiles.ComputeMd5(tempPath);
             if (!file.Md5.Equals(downloadedMd5, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException(
                     $"[{file.Name}] hash mismatch after download (expected {file.Md5}, got {downloadedMd5})");
 
-            File.Move(tempPath, filePath, overwrite: true);
+            _localFiles.Move(tempPath, filePath);
         }
         finally
         {
             try
             {
-                if (File.Exists(tempPath))
-                    File.Delete(tempPath);
+                _localFiles.DeleteIfExists(tempPath);
             }
             catch (Exception e)
             {

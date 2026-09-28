@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.IO.Abstractions;
 using System.Runtime.CompilerServices;
 using Avalonia.Threading;
 using FileUpdaterClient.Updating;
@@ -145,7 +146,8 @@ public class MainViewModel : INotifyPropertyChanged
     {
         var installPath = InstallLocation.Path;
         _launcher = TazUOLauncherConfig.Enabled ? new TazUOLauncher(installPath) : null;
-        _updates = new UpdateService(new FileServerClient(LauncherConfig.UpdateUrl), installPath, _launcher);
+        var localFiles = new LocalFiles(new FileSystem());
+        _updates = new UpdateService(new FileServerClient(LauncherConfig.UpdateUrl, localFiles), localFiles, installPath, _launcher);
         _updates.ProgressChanged += progress => Dispatcher.UIThread.Post(() => ShowProgress(progress));
         _updates.FileProgressChanged += file => Dispatcher.UIThread.Post(() => ShowFileProgress(file));
         _updates.ErrorOccurred += error => Dispatcher.UIThread.Post(() => ShowError(error));

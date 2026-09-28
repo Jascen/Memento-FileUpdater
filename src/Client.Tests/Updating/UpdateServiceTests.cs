@@ -1,30 +1,34 @@
+using System.IO.Abstractions.TestingHelpers;
 using System.Net;
 using FileUpdaterClient.Tests.Fakes;
 using FileUpdaterClient.Updating;
 
 namespace FileUpdaterClient.Tests.Updating;
 
-public class UpdateServiceTests : IDisposable
+//Runs against an in-memory file system and fake server, so nothing touches the disk or network
+public class UpdateServiceTests
 {
     private const string Url = "http://updates.test/";
-    private readonly string _installPath = Path.Combine(Path.GetTempPath(), "updater-tests-" + Guid.NewGuid());
+    private static readonly string InstallPath = MockUnixSupport.Path(@"C:\game");
+    private readonly MockFileSystem _fileSystem = new();
     private readonly FakeServer _server = new();
 
-    public UpdateServiceTests() => Directory.CreateDirectory(_installPath);
+    public UpdateServiceTests() => _fileSystem.Directory.CreateDirectory(InstallPath);
 
-    public void Dispose() => Directory.Delete(_installPath, recursive: true);
-
-    private UpdateService CreateService(ILauncherInstaller? launcher = null) =>
-        new(new FileServerClient(Url, _server), _installPath, launcher);
+    private UpdateService CreateService(ILauncherInstaller? launcher = null)
+    {
+        var localFiles = new LocalFiles(_fileSystem);
+        return new UpdateService(new FileServerClient(Url, localFiles, _server), localFiles, InstallPath, launcher);
+    }
 
     private void WriteLocal(string name, string content)
     {
-        var path = Path.Combine(_installPath, name);
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, content);
+        var path = _fileSystem.Path.Combine(InstallPath, name);
+        _fileSystem.Directory.CreateDirectory(_fileSystem.Path.GetDirectoryName(path)!);
+        _fileSystem.File.WriteAllText(path, content);
     }
 
-    private string ReadLocal(string name) => File.ReadAllText(Path.Combine(_installPath, name));
+    private string ReadLocal(string name) => _fileSystem.File.ReadAllText(_fileSystem.Path.Combine(InstallPath, name));
 
     [Fact]
     public async Task CheckFinishesWhenFilesMatch()

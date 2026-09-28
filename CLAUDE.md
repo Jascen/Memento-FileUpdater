@@ -65,13 +65,15 @@ dotnet publish -c Release -r osx-x64
 
 Output location: `src/Client/bin/Release/net9.0/{runtime}/publish/`
 
-Tests (update logic against an in-memory fake server):
+Tests (update logic against an in-memory fake server and file system):
 ```bash
 cd src/Client.Tests
 dotnet test
 ```
 
 Each test is split into `//Arrange`, `//Act` and `//Assert` sections, with one action under `//Act` (tests with nothing to set up skip `//Arrange`).
+
+Unit tests never touch the real disk or network: use `MockFileSystem` (System.IO.Abstractions) for files, with paths from `MockUnixSupport.Path(...)`, and `FakeServer` for HTTP.
 
 ### Server (C# .NET)
 
@@ -116,8 +118,8 @@ The client uses Avalonia UI framework with MVVM pattern:
 
 No Avalonia or UI code, so it can be tested on its own:
 
-- `FileServerClient` → HTTP: fetches the file list (5s timeout) and downloads a file to `.part`, checks its MD5, then moves it into place (15 min timeout). Takes an optional `HttpMessageHandler` so tests can fake the server
-- `LocalFiles` → path safety (`TryGetLocalPath` rejects names outside the install folder), MD5, directory creation
+- `FileServerClient` → HTTP: fetches the file list (5s timeout) and downloads a file to `.part`, checks its MD5, then moves it into place (15 min timeout). Takes an optional `HttpMessageHandler` so tests can fake the server, and writes files through `LocalFiles`
+- `LocalFiles` → path safety (`TryGetLocalPath` rejects names outside the install folder), MD5, directory creation and file writes. All file access goes through an injected `IFileSystem` (System.IO.Abstractions): the app passes `new FileSystem()`, tests pass a `MockFileSystem`
 - `UpdateService` → one instance per install folder:
   1. **CheckAsync()**: fetches the file list and compares local MD5s with `WORKER_COUNT` (2) workers, stopping at the first difference. Returns `UpdatesReady`, `LauncherReady` (TazUO missing), `Finished`, `Failed` or `Cancelled`; nothing is downloaded
   2. **DownloadAsync()**: runs after the player clicks "Download updates". Compares the files the check skipped, then downloads with `WORKER_COUNT` workers (up to 5 attempts per file, with backoff), then installs TazUO if enabled

@@ -1,3 +1,4 @@
+using System.IO.Abstractions.TestingHelpers;
 using System.Text.Json;
 using FileUpdaterClient.Tests.Fakes;
 using FileUpdaterClient.Updating;
@@ -6,7 +7,7 @@ namespace FileUpdaterClient.Tests.Updating;
 
 public class LocalFilesTests
 {
-    private static readonly string Root = Path.Combine(Path.GetTempPath(), "updater-root");
+    private static readonly string Root = MockUnixSupport.Path(@"C:\game");
 
     [Theory]
     [InlineData("map0.mul")]
@@ -38,21 +39,15 @@ public class LocalFilesTests
     public void ComputesLowercaseMd5()
     {
         //Arrange
-        var file = Path.GetTempFileName();
-        File.WriteAllText(file, "hello");
+        var file = MockUnixSupport.Path(@"C:\game\hello.txt");
+        var fileSystem = new MockFileSystem(new Dictionary<string, MockFileData> { [file] = new("hello") });
+        var localFiles = new LocalFiles(fileSystem);
 
-        try
-        {
-            //Act
-            var md5 = LocalFiles.ComputeMd5(file);
+        //Act
+        var md5 = localFiles.ComputeMd5(file);
 
-            //Assert
-            Assert.Equal(FakeServer.Md5("hello"), md5);
-        }
-        finally
-        {
-            File.Delete(file);
-        }
+        //Assert
+        Assert.Equal(FakeServer.Md5("hello"), md5);
     }
 
     [Fact]
