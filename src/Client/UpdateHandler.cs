@@ -18,29 +18,36 @@ public static class UpdateHandler
     private static MainViewModel data;
     private static double currentMaxProgress;
     private static int completedDownloads = 0;
-    private static int downloadStarted = 0;
+    private static int failedDownloads = 0;
+    private static int isRunning; //Set while a check or download is in progress, so repeat clicks and Verify are ignored
     private static volatile bool stopAtFirstDifference;
+    private static bool needsRecheck; //A cancelled run leaves the queues incomplete, so the next download starts from a fresh file list
     private static long totalBytesDownloaded = 0;
     private static readonly Stopwatch downloadClock = new(); //Wall-clock time of the download phase, shared by all workers
     private static DateTime lastUiUpdateTime = DateTime.MinValue;
-    private static readonly CancellationTokenSource cancellationSource = new();
-    private static readonly CancellationToken cancellationToken = cancellationSource.Token;
+    private static CancellationTokenSource cancellationSource = new();
+    private static CancellationToken cancellationToken = cancellationSource.Token;
 
     //Checks the server's file list against local files. Nothing is downloaded until the player clicks the download button
     public static async Task HandleUpdates(MainViewModel dataModel)
     {
+        if (Interlocked.Exchange(ref isRunning, 1) == 1) return;
+
         data = dataModel;
+        Reset();
         try
         {
+            client = new HttpClient(); //Fresh client each check, the timeout can't change after a request
             client.Timeout = TimeSpan.FromSeconds(5); //Initial connection
             if (!await GetFileList()) return;
+            needsRecheck = false;
 
             //Only need to know whether anything changed, the rest is checked when the player clicks download
             await StartComparingFiles(stopAtFirstDifference: true);
 
             if (cancellationToken.IsCancellationRequested) return;
 
-            if (!downloadQueue.IsEmpty || !TazUOSetup.IsInstalled)
+            if (!downloadQueue.IsEmpty || (Settings.EnableTazUO && !TazUOSetup.IsInstalled))
             {
                 var filesChanged = !downloadQueue.IsEmpty;
                 Dispatcher.UIThread.Post(() =>
@@ -59,15 +66,32 @@ public static class UpdateHandler
             Console.WriteLine(e.ToString());
             Dispatcher.UIThread.Post(() => data.ErrorMessage = Settings.UnknownError);
         }
+        finally
+        {
+            EndRun(wasDownload: false);
+        }
     }
 
     //Downloads the files found by HandleUpdates, called when the player clicks the download button
     public static async Task DownloadUpdates()
     {
-        if (Interlocked.Exchange(ref downloadStarted, 1) == 1) return; //Ignore repeat clicks
-        Dispatcher.UIThread.Post(() => data.DownloadsReady = false);
+        if (Interlocked.Exchange(ref isRunning, 1) == 1) return; //Ignore repeat clicks
+        Dispatcher.UIThread.Post(() =>
+        {
+            data.DownloadsReady = false;
+            data.IsUpdating = true;
+        });
         try
         {
+            if (needsRecheck)
+            {
+                Reset();
+                client = new HttpClient();
+                client.Timeout = TimeSpan.FromSeconds(5); //Initial connection
+                if (!await GetFileList()) return;
+                needsRecheck = false;
+            }
+
             await StartComparingFiles(stopAtFirstDifference: false); //Check the files the launch check skipped
 
             client = new HttpClient(); //Must have new client for new timeout
@@ -81,6 +105,10 @@ public static class UpdateHandler
             Console.WriteLine(e.ToString());
             Dispatcher.UIThread.Post(() => data.ErrorMessage = Settings.UnknownError);
         }
+        finally
+        {
+            EndRun(wasDownload: true);
+        }
     }
 
     private static async Task FinishUpdate()
@@ -89,11 +117,56 @@ public static class UpdateHandler
 
         if (cancellationToken.IsCancellationRequested) return;
 
+        var verified = Volatile.Read(ref failedDownloads) == 0; //Every file matched the server or was downloaded
         Dispatcher.UIThread.Post(() => //Ensure the final finished text is queued in case other text updates are already queued, making sure this is the last one ran.
         {
+            data.FilesVerified = verified;
             data.Progress = 100;
+            data.FileProgress = 100;
             data.ProgressText = Settings.Finished;
+            data.FileProgressText = string.Empty;
         });
+    }
+
+    //Clears state from a previous run so Verify can check everything again
+    private static void Reset()
+    {
+        if (cancellationSource.IsCancellationRequested)
+        {
+            cancellationSource = new CancellationTokenSource();
+            cancellationToken = cancellationSource.Token;
+        }
+
+        downloadQueue.Clear();
+        remoteFileListQueue.Clear();
+        completedDownloads = 0;
+        failedDownloads = 0;
+        totalBytesDownloaded = 0;
+
+        data.IsUpdating = true;
+        data.FilesVerified = false;
+        data.DownloadsReady = false;
+        data.ErrorMessage = string.Empty;
+        data.Progress = 0;
+        data.FileProgress = 0;
+        data.FileProgressText = string.Empty;
+    }
+
+    private static void EndRun(bool wasDownload)
+    {
+        var cancelled = cancellationToken.IsCancellationRequested;
+        if (cancelled) needsRecheck = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (cancelled)
+            {
+                //A cancelled download leaves known out of date files, so offer it again. A cancelled check just leaves them unverified
+                data.ProgressText = Settings.Cancelled;
+                data.DownloadsReady = wasDownload;
+            }
+            data.IsUpdating = false;
+        });
+        Interlocked.Exchange(ref isRunning, 0);
     }
 
     public static void Cancel()
@@ -103,7 +176,7 @@ public static class UpdateHandler
 
     private static async Task SetUpTazUO()
     {
-        if (cancellationToken.IsCancellationRequested) return;
+        if (!Settings.EnableTazUO || cancellationToken.IsCancellationRequested) return;
 
         Dispatcher.UIThread.Post(() => data.ProgressText = Settings.InstallingTazUO);
         try
@@ -115,6 +188,9 @@ public static class UpdateHandler
             Console.WriteLine(e.ToString());
             Dispatcher.UIThread.Post(() => data.ErrorMessage = Settings.TazUOError);
         }
+
+        var installed = TazUOSetup.IsInstalled;
+        Dispatcher.UIThread.Post(() => data.LauncherInstalled = installed);
     }
 
     private static async Task<bool> GetFileList()
@@ -296,6 +372,7 @@ public static class UpdateHandler
                         var fname = file.name;
                         Console.WriteLine($"Failed to download [{file.name}] after {MAX_ATTEMPTS} attempts, skipping..");
                         Dispatcher.UIThread.Post(() => data.ErrorMessage = string.Format(Settings.FileFailedError, fname));
+                        Interlocked.Increment(ref failedDownloads);
                         break;
                     }
 
@@ -317,6 +394,7 @@ public static class UpdateHandler
             Interlocked.Increment(ref completedDownloads);
 
             // Final UI update after file is done
+            Dispatcher.UIThread.Post(() => data.FileProgress = 100);
             PostDownloadProgress();
         }
     }
@@ -329,7 +407,18 @@ public static class UpdateHandler
         {
             Uri updateUrl = new Uri(Settings.UpdateUrl + "/file/" + file.name);
 
-            using (var responseStream = await client.GetStreamAsync(updateUrl, cancellationToken))
+            using var response = await client.GetAsync(updateUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            long? fileLength = response.Content.Headers.ContentLength;
+            long fileBytesDownloaded = 0;
+            var fileLabel = string.Format(Settings.CurrentFile, file.name);
+            Dispatcher.UIThread.Post(() =>
+            {
+                data.FileProgress = 0;
+                data.FileProgressText = fileLabel;
+            });
+
+            using (var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken))
             using (var fileStream = File.Create(tempPath))
             {
                 byte[] buffer = new byte[81920];
@@ -340,11 +429,18 @@ public static class UpdateHandler
                     await fileStream.WriteAsync(buffer, 0, bytesRead, cancellationToken);
 
                     Interlocked.Add(ref totalBytesDownloaded, bytesRead);
+                    fileBytesDownloaded += bytesRead;
 
                     // Limit UI updates to every 0.5 seconds
                     if ((DateTime.UtcNow - lastUiUpdateTime).TotalSeconds >= 0.5)
                     {
                         lastUiUpdateTime = DateTime.UtcNow;
+                        double fileProgress = fileLength > 0 ? fileBytesDownloaded / (double)fileLength * 100 : 0;
+                        Dispatcher.UIThread.Post(() =>
+                        {
+                            data.FileProgress = fileProgress;
+                            data.FileProgressText = fileLabel;
+                        });
                         PostDownloadProgress();
                     }
                 }

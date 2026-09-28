@@ -102,7 +102,7 @@ The client uses Avalonia UI framework with MVVM pattern:
 
 1. **GetFileList()**: Fetches JSON array of `{name, md5}` from server root endpoint
 2. **StartComparingFiles()**: Spawns `WORKER_COUNT` (2) workers that compare local file MD5s against server MD5s, queuing mismatches/missing files for download
-3. **StartDownloading()**: Runs only after the player clicks the "Download updates" button (`DownloadUpdates()`); the launch check stops at the first changed or missing file, and the remaining files are compared after the click. Spawns `WORKER_COUNT` (2) workers that download queued files with retry logic (up to 5 attempts per file, with backoff)
+3. **StartDownloading()**: Runs only after the player clicks the center "Download updates" button (`DownloadUpdates()`); the launch check stops at the first changed or missing file, and the remaining files are compared after the click. Spawns `WORKER_COUNT` (2) workers that download queued files with retry logic (up to 5 attempts per file, with backoff)
 
 All phases use `ConcurrentQueue` for thread-safe work distribution and `Dispatcher.UIThread.Post()` to update UI from background threads.
 
@@ -170,13 +170,18 @@ The server is an ASP.NET Core minimal API application with the following compone
 All branding/configuration is in `src/Client/Settings.cs`:
 - `Title`, `Subtitle`: Header text
 - `TitleColor`, `SubtitleColor`: Hex color strings for text
-- `DefaultTextColor`, `ProgressBarBackground`, `ProgressBarForeground`: Brush colors
+- `DefaultTextColor`, `ProgressBarBackground`: Brush colors
+- `TotalProgressColor` (blue bar, progress across all files), `FileProgressColor` (red bar, current file download)
+- `Links`: Top navigation links (`NavLink(label, url)`); `NavLink.VerifyAction` as the target re-runs the file check
+- `EnableTazUO`: When false, the TazUO launcher is never downloaded, there is no Play Now button, and the play warning option is hidden from Settings
+- `DownloadButton`, `PlayText`: Center button; shows `DownloadButton` while updates are waiting, then `PlayText`, which opens the TazUO launcher once it is installed. If the files weren't fully verified it first asks the player to confirm (`UnverifiedTitle`, `UnverifiedMessage`)
+- Player settings (cog button, modal `SettingsDialog`): install directory (saved by `InstallLocation.cs`; changing it restarts the updater), plus verify files on launch and warn before playing with unverified files (saved to `%AppData%/<AppDataFolder>/settings.json` by `Preferences.cs`)
 - `UpdateUrl`: Server endpoint (must include trailing slash if using path segments)
 - `Finished`, `ReqFileList`, `ComparingFiles`, `DownloadingFiles`: Status messages (support `string.Format` placeholders)
 - Error messages: `ConError`, `BadData`, `UnknownError`, `FileFailedError`
 
 Visual assets:
-- `src/Client/resources/background.png`: 800x450 background image
+- `src/Client/resources/background.png`: Background image (window is 900x675, borderless)
 - `src/Client/resources/icon.ico`: Application icon
 
 ### Server Configuration

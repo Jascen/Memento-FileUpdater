@@ -32,6 +32,9 @@ public static class InstallLocation
     //Creates the current folder if needed and checks it can be written to
     public static bool EnsureUsable(out string error) => CheckWritable(Path, out error);
 
+    //Checks a folder the player picked without saving it
+    public static bool CanUse(string folder, out string error) => CheckWritable(folder, out error);
+
     //Saves a folder the player picked. Returns false with a message if it can't be used
     public static bool TrySet(string folder, out string error)
     {
