@@ -20,7 +20,6 @@ public static class UpdateHandler
     private static int completedDownloads = 0;
     private static int downloadStarted = 0;
     private static volatile bool stopAtFirstDifference;
-    private static ConcurrentDictionary<string, int> retryMap = new();
     private static long totalBytesDownloaded = 0;
     private static readonly Stopwatch downloadClock = new(); //Wall-clock time of the download phase, shared by all workers
     private static DateTime lastUiUpdateTime = DateTime.MinValue;
@@ -274,39 +273,48 @@ public static class UpdateHandler
             if (file == null)
                 continue;
 
-            try
+            TryGetLocalPath(file.name, out var filePath);
+            Console.WriteLine($"Downloading [{file.name}]...");
+
+            for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)
             {
-                TryGetLocalPath(file.name, out var filePath);
-                Console.WriteLine($"Downloading [{file.name}]...");
-                EnsureDirectory(filePath);
-
-                await DownloadFile(file, filePath);
-                if (cancellationToken.IsCancellationRequested)
-                    return;
-
-                Interlocked.Increment(ref completedDownloads);
-            }
-            catch (Exception ex)
-            {
-                if (cancellationToken.IsCancellationRequested)
-                    return;
-
-                Console.WriteLine(ex.ToString());
-                int attempts = retryMap.AddOrUpdate(file.name, 1, (_, count) => count + 1);
-
-                if (attempts >= MAX_ATTEMPTS)
+                try
                 {
-                    var fname = file.name;
-                    Console.WriteLine($"Failed to download [{file.name}] after {MAX_ATTEMPTS} attempts, skipping..");
-                    Dispatcher.UIThread.Post(() => data.ErrorMessage = string.Format(Settings.FileFailedError, fname));
-                    Interlocked.Increment(ref completedDownloads);
+                    EnsureDirectory(filePath);
+                    await DownloadFile(file, filePath);
+                    break;
                 }
-                else
+                catch (Exception ex)
                 {
-                    downloadQueue.Enqueue(file);
-                    continue;
+                    if (cancellationToken.IsCancellationRequested)
+                        return;
+
+                    Console.WriteLine(ex.ToString());
+
+                    if (attempt == MAX_ATTEMPTS)
+                    {
+                        var fname = file.name;
+                        Console.WriteLine($"Failed to download [{file.name}] after {MAX_ATTEMPTS} attempts, skipping..");
+                        Dispatcher.UIThread.Post(() => data.ErrorMessage = string.Format(Settings.FileFailedError, fname));
+                        break;
+                    }
+
+                    //Back off before retrying: 1s, 2s, 4s, 8s
+                    try
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(1 << (attempt - 1)), cancellationToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
                 }
             }
+
+            if (cancellationToken.IsCancellationRequested)
+                return;
+
+            Interlocked.Increment(ref completedDownloads);
 
             // Final UI update after file is done
             PostDownloadProgress();
