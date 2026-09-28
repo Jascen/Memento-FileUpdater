@@ -12,6 +12,7 @@ public class MainViewModel : INotifyPropertyChanged
     private string _subtitleColor = Settings.SubtitleColor;
     private string _installPath = string.Empty;
     private string _changeFolderText = Settings.ChangeFolder;
+    private bool _downloadsReady;
     private double _progress;
     private double _fileProgress;
     private string _progressText = "Checking for updates..";
@@ -20,7 +21,6 @@ public class MainViewModel : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public IReadOnlyList<NavLink> Links { get; } = Settings.Links;
-    public string PlayText { get; } = Settings.PlayText;
     public string PrivacyPolicyText { get; } = Settings.PrivacyPolicyText;
     public bool HasPrivacyPolicy { get; } = !string.IsNullOrEmpty(Settings.PrivacyPolicyUrl);
 
@@ -66,6 +66,19 @@ public class MainViewModel : INotifyPropertyChanged
         set => SetField(ref _changeFolderText, value);
     }
 
+    /// <summary>True once the launch check found updates, until the player clicks the main button to download them.</summary>
+    public bool DownloadsReady
+    {
+        get => _downloadsReady;
+        set
+        {
+            if (!SetField(ref _downloadsReady, value)) return;
+            OnPropertyChanged(nameof(CanPlay));
+            OnPropertyChanged(nameof(MainButtonText));
+            OnPropertyChanged(nameof(MainButtonEnabled));
+        }
+    }
+
     /// <summary>Overall progress across all files (blue bar), 0-100.</summary>
     public double Progress
     {
@@ -97,12 +110,17 @@ public class MainViewModel : INotifyPropertyChanged
         get => _isUpdating;
         set
         {
-            if (SetField(ref _isUpdating, value))
-                OnPropertyChanged(nameof(CanPlay));
+            if (!SetField(ref _isUpdating, value)) return;
+            OnPropertyChanged(nameof(CanPlay));
+            OnPropertyChanged(nameof(MainButtonEnabled));
         }
     }
 
-    public bool CanPlay => !IsUpdating && !string.IsNullOrEmpty(Settings.GameExecutable);
+    public bool CanPlay => !IsUpdating && !DownloadsReady && !string.IsNullOrEmpty(Settings.GameExecutable);
+
+    //The center button downloads pending updates first, then becomes the play button
+    public string MainButtonText => DownloadsReady ? Settings.DownloadButton : Settings.PlayText;
+    public bool MainButtonEnabled => DownloadsReady || CanPlay;
 
     protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {

@@ -71,6 +71,15 @@ public partial class Main : Window
         }
     }
 
+    //The center button downloads pending updates first, then launches the game
+    private async void MainButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_data.DownloadsReady)
+            await UpdateHandler.DownloadUpdates();
+        else
+            Play();
+    }
+
     private async void ChangeFolder_Click(object? sender, RoutedEventArgs e)
     {
         if (!_updateStarted)
@@ -110,7 +119,7 @@ public partial class Main : Window
 
     private void PrivacyPolicy_Click(object? sender, RoutedEventArgs e) => OpenUrl(Settings.PrivacyPolicyUrl);
 
-    private void Play_Click(object? sender, RoutedEventArgs e)
+    private void Play()
     {
         try
         {

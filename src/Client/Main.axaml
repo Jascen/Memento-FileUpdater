@@ -141,13 +141,15 @@
                         </Path>
                         <Path Stretch="Fill" Margin="11" StrokeThickness="1.5" Stroke="#8C6630"
                               Data="M 30,0 L 240,0 L 270,48 L 240,96 L 30,96 L 0,48 Z" />
-                        <ContentPresenter Name="Label" Content="{TemplateBinding Content}"
-                                          Foreground="{TemplateBinding Foreground}"
-                                          HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <ContentPresenter.Effect>
-                                <DropShadowEffect Color="Black" BlurRadius="6" OffsetX="0" OffsetY="2" Opacity="0.9" />
-                            </ContentPresenter.Effect>
-                        </ContentPresenter>
+                        <!-- Shrinks longer labels (e.g. the download text) to fit inside the frame -->
+                        <Viewbox StretchDirection="DownOnly" Margin="34,0" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <ContentPresenter Name="Label" Content="{TemplateBinding Content}"
+                                              Foreground="{TemplateBinding Foreground}">
+                                <ContentPresenter.Effect>
+                                    <DropShadowEffect Color="Black" BlurRadius="6" OffsetX="0" OffsetY="2" Opacity="0.9" />
+                                </ContentPresenter.Effect>
+                            </ContentPresenter>
+                        </Viewbox>
                     </Grid>
                 </ControlTemplate>
             </Setter>
@@ -274,8 +276,8 @@
                         <DropShadowEffect Color="Black" BlurRadius="6" OffsetX="0" OffsetY="1" Opacity="1" />
                     </TextBlock.Effect>
                 </TextBlock>
-                <Button Classes="play" Content="{Binding PlayText}" IsEnabled="{Binding CanPlay}"
-                        HorizontalAlignment="Center" Margin="0,28,0,0" Click="Play_Click" />
+                <Button Classes="play" Content="{Binding MainButtonText}" IsEnabled="{Binding MainButtonEnabled}"
+                        HorizontalAlignment="Center" Margin="0,28,0,0" Click="MainButton_Click" />
             </StackPanel>
 
             <!-- Progress: blue = all files, red = current file -->
