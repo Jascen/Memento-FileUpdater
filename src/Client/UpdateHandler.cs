@@ -36,6 +36,8 @@ public static class UpdateHandler
         client.Timeout = TimeSpan.FromMinutes(15); //Download timeout
         await StartDownloading();
 
+        await SetUpTazUO();
+
         Dispatcher.UIThread.Post(() => //Ensure the final finished text is queued in case other text updates are already queued, making sure this is the last one ran.
         {
             data.Progress = 100;
@@ -46,6 +48,22 @@ public static class UpdateHandler
     public static void Cancel()
     {
         cancellationSource.Cancel();
+    }
+
+    private static async Task SetUpTazUO()
+    {
+        if (cancellationToken.IsCancellationRequested) return;
+
+        Dispatcher.UIThread.Post(() => data.ProgressText = Settings.InstallingTazUO);
+        try
+        {
+            await TazUOSetup.EnsureInstalledAsync(cancellationToken);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e.ToString());
+            Dispatcher.UIThread.Post(() => data.ErrorMessage = Settings.TazUOError);
+        }
     }
 
     private static async Task<bool> GetFileList()
@@ -134,7 +152,7 @@ public static class UpdateHandler
     {
         while (!cancellationToken.IsCancellationRequested && remoteFileListQueue.TryDequeue(out FileEntry file))
         {
-            var fullPath = Path.GetFullPath(file.name, AppDomain.CurrentDomain.BaseDirectory);
+            var fullPath = Path.GetFullPath(file.name, InstallLocation.Path);
             if (File.Exists(fullPath))
             {
                 if (!file.md5.Equals(GetMD5HashFromFile(fullPath)))
@@ -168,7 +186,7 @@ public static class UpdateHandler
 
             try
             {
-                var filePath = Path.GetFullPath(file.name, AppDomain.CurrentDomain.BaseDirectory);
+                var filePath = Path.GetFullPath(file.name, InstallLocation.Path);
                 Console.WriteLine($"Downloading [{file.name}]...");
                 EnsureDirectory(filePath);
 
