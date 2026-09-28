@@ -12,6 +12,7 @@ public class MainViewModel : INotifyPropertyChanged
     private string _subtitleColor = Settings.SubtitleColor;
     private string _installPath = string.Empty;
     private string _changeFolderText = Settings.ChangeFolder;
+    private bool _downloadsReady;
     private double _progress;
     private string _progressText = "Checking for updates..";
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -56,6 +57,12 @@ public class MainViewModel : INotifyPropertyChanged
     {
         get => _changeFolderText;
         set => SetField(ref _changeFolderText, value);
+    }
+
+    public bool DownloadsReady
+    {
+        get => _downloadsReady;
+        set => SetField(ref _downloadsReady, value);
     }
 
     public double Progress

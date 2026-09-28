@@ -18,6 +18,7 @@ public static class UpdateHandler
     private static MainViewModel data;
     private static double currentMaxProgress;
     private static int completedDownloads = 0;
+    private static int downloadStarted = 0;
     private static ConcurrentDictionary<string, int> retryMap = new();
     private static long totalBytesDownloaded = 0;
     private static readonly Stopwatch downloadClock = new(); //Wall-clock time of the download phase, shared by all workers
@@ -25,6 +26,7 @@ public static class UpdateHandler
     private static readonly CancellationTokenSource cancellationSource = new();
     private static readonly CancellationToken cancellationToken = cancellationSource.Token;
 
+    //Checks the server's file list against local files. Nothing is downloaded until the player clicks the download button
     public static async Task HandleUpdates(MainViewModel dataModel)
     {
         data = dataModel;
@@ -35,25 +37,62 @@ public static class UpdateHandler
 
             await StartComparingFiles();
 
-            client = new HttpClient(); //Must have new client for new timeout
-            client.Timeout = TimeSpan.FromMinutes(15); //Download timeout
-            await StartDownloading();
-
-            await SetUpTazUO();
-
             if (cancellationToken.IsCancellationRequested) return;
 
-            Dispatcher.UIThread.Post(() => //Ensure the final finished text is queued in case other text updates are already queued, making sure this is the last one ran.
+            if (!downloadQueue.IsEmpty || !TazUOSetup.IsInstalled)
             {
-                data.Progress = 100;
-                data.ProgressText = Settings.Finished;
-            });
+                var fileCount = downloadQueue.Count;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    data.Progress = 0;
+                    data.ProgressText = fileCount > 0
+                        ? string.Format(Settings.UpdatesReady, fileCount)
+                        : Settings.LauncherReady;
+                    data.DownloadsReady = true;
+                });
+                return;
+            }
+
+            await FinishUpdate();
         }
         catch (Exception e)
         {
             Console.WriteLine(e.ToString());
             Dispatcher.UIThread.Post(() => data.ErrorMessage = Settings.UnknownError);
         }
+    }
+
+    //Downloads the files found by HandleUpdates, called when the player clicks the download button
+    public static async Task DownloadUpdates()
+    {
+        if (Interlocked.Exchange(ref downloadStarted, 1) == 1) return; //Ignore repeat clicks
+        Dispatcher.UIThread.Post(() => data.DownloadsReady = false);
+        try
+        {
+            client = new HttpClient(); //Must have new client for new timeout
+            client.Timeout = TimeSpan.FromMinutes(15); //Download timeout
+            await StartDownloading();
+
+            await FinishUpdate();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e.ToString());
+            Dispatcher.UIThread.Post(() => data.ErrorMessage = Settings.UnknownError);
+        }
+    }
+
+    private static async Task FinishUpdate()
+    {
+        await SetUpTazUO();
+
+        if (cancellationToken.IsCancellationRequested) return;
+
+        Dispatcher.UIThread.Post(() => //Ensure the final finished text is queued in case other text updates are already queued, making sure this is the last one ran.
+        {
+            data.Progress = 100;
+            data.ProgressText = Settings.Finished;
+        });
     }
 
     public static void Cancel()

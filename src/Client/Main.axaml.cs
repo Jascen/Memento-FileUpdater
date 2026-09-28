@@ -70,6 +70,11 @@ public partial class Main : Window
         }
     }
 
+    private async void Download_Click(object? sender, RoutedEventArgs e)
+    {
+        await UpdateHandler.DownloadUpdates();
+    }
+
     private async void ChangeFolder_Click(object? sender, RoutedEventArgs e)
     {
         if (!_updateStarted)

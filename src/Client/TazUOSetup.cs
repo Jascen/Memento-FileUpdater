@@ -17,9 +17,11 @@ public static class TazUOSetup
     public static string LauncherExecutable => Path.Combine(LauncherDirectory,
         LauncherExeName + (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : string.Empty));
 
+    public static bool IsInstalled => File.Exists(LauncherExecutable);
+
     public static async Task EnsureInstalledAsync(CancellationToken cancellationToken)
     {
-        if (!File.Exists(LauncherExecutable))
+        if (!IsInstalled)
             await DownloadLauncherAsync(cancellationToken);
 
         foreach (var profile in Settings.TazUOProfiles)
