@@ -20,8 +20,7 @@ public static class UpdateHandler
     private static int completedDownloads = 0;
     private static ConcurrentDictionary<string, int> retryMap = new();
     private static long totalBytesDownloaded = 0;
-    private static TimeSpan totalDownloadTime = TimeSpan.Zero;
-    private static readonly object downloadStatsLock = new();
+    private static readonly Stopwatch downloadClock = new(); //Wall-clock time of the download phase, shared by all workers
     private static DateTime lastUiUpdateTime = DateTime.MinValue;
     private static readonly CancellationTokenSource cancellationSource = new();
     private static readonly CancellationToken cancellationToken = cancellationSource.Token;
@@ -168,6 +167,7 @@ public static class UpdateHandler
             data.ProgressText = string.Format(Settings.DownloadingFiles, "0", currentMaxProgress, "0");
         });
 
+        downloadClock.Restart();
         var tasks = new List<Task>();
         for (int i = 0; i < WORKER_COUNT; i++)
         {
@@ -265,24 +265,18 @@ public static class UpdateHandler
             {
                 byte[] buffer = new byte[81920];
                 int bytesRead;
-                var sw = Stopwatch.StartNew();
 
                 while ((bytesRead = await responseStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0)
                 {
                     await fileStream.WriteAsync(buffer, 0, bytesRead, cancellationToken);
 
-                    lock (downloadStatsLock)
-                    {
-                        totalBytesDownloaded += bytesRead;
-                        totalDownloadTime += sw.Elapsed;
-                    }
+                    Interlocked.Add(ref totalBytesDownloaded, bytesRead);
 
                     // Limit UI updates to every 0.5 seconds
                     if ((DateTime.UtcNow - lastUiUpdateTime).TotalSeconds >= 0.5)
                     {
                         lastUiUpdateTime = DateTime.UtcNow;
                         PostDownloadProgress();
-                        sw.Restart(); // reset stopwatch for next chunk interval
                     }
                 }
             }
@@ -311,13 +305,10 @@ public static class UpdateHandler
 
     private static void PostDownloadProgress()
     {
-        double avgSpeed;
-        lock (downloadStatsLock)
-        {
-            avgSpeed = totalDownloadTime.TotalSeconds > 0
-                ? totalBytesDownloaded / totalDownloadTime.TotalSeconds
-                : 0;
-        }
+        double elapsedSeconds = downloadClock.Elapsed.TotalSeconds;
+        double avgSpeed = elapsedSeconds > 0
+            ? Interlocked.Read(ref totalBytesDownloaded) / elapsedSeconds
+            : 0;
 
         string speedStr = $"{(avgSpeed / 1024):F2} KB/s";
         int completed = Volatile.Read(ref completedDownloads);
