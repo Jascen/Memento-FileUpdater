@@ -117,8 +117,6 @@ public partial class Main : Window
             OpenUrl(link.Target);
     }
 
-    private void PrivacyPolicy_Click(object? sender, RoutedEventArgs e) => OpenUrl(Settings.PrivacyPolicyUrl);
-
     private void Play()
     {
         try

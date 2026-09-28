@@ -173,7 +173,6 @@ All branding/configuration is in `src/Client/Settings.cs`:
 - `DefaultTextColor`, `ProgressBarBackground`: Brush colors
 - `TotalProgressColor` (blue bar, progress across all files), `FileProgressColor` (red bar, current file download)
 - `Links`: Top navigation links (`NavLink(label, url)`); `NavLink.VerifyAction` as the target re-runs the file check
-- `PrivacyPolicyText`, `PrivacyPolicyUrl`: Bottom-right link (hidden when url is empty)
 - `DownloadButton`, `PlayText`, `GameExecutable`: Center button; shows `DownloadButton` while updates are waiting, then `PlayText`, which launches `GameExecutable` (relative to the install folder)
 - `UpdateUrl`: Server endpoint (must include trailing slash if using path segments)
 - `Finished`, `ReqFileList`, `ComparingFiles`, `DownloadingFiles`: Status messages (support `string.Format` placeholders)

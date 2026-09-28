@@ -21,8 +21,6 @@ public class MainViewModel : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public IReadOnlyList<NavLink> Links { get; } = Settings.Links;
-    public string PrivacyPolicyText { get; } = Settings.PrivacyPolicyText;
-    public bool HasPrivacyPolicy { get; } = !string.IsNullOrEmpty(Settings.PrivacyPolicyUrl);
 
     public string TitleColor
     {

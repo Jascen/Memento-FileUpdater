@@ -331,10 +331,6 @@
                     <TextBlock Text="{Binding InstallPath}" VerticalAlignment="Center" FontSize="12" Foreground="#CDBB92"
                                MaxWidth="420" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
-
-                <Button Classes="link" Content="{Binding PrivacyPolicyText}" IsVisible="{Binding HasPrivacyPolicy}"
-                        HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,20,14"
-                        Click="PrivacyPolicy_Click" />
             </Grid>
         </Grid>
     </Grid>

@@ -25,9 +25,6 @@ public static class Settings
         new("Verify", NavLink.VerifyAction),
     ];
 
-    public const string PrivacyPolicyText = "Privacy Policy";
-    public const string PrivacyPolicyUrl = "https://example.com/privacy"; //Leave empty to hide the link
-
     public const string PlayText = "PLAY NOW";
     public const string GameExecutable = ""; //Path relative to the install folder, e.g. "client.exe". The play button stays disabled while this is empty
 
