@@ -36,7 +36,7 @@ public partial class SettingsDialog : Window
         {
             Title = Settings.ChooseFolderTitle,
             AllowMultiple = false,
-            SuggestedStartLocation = await StorageProvider.TryGetWellKnownFolderAsync(WellKnownFolder.Documents),
+            SuggestedStartLocation = await GetStartFolder(),
         });
 
         var folder = folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
@@ -51,6 +51,18 @@ public partial class SettingsDialog : Window
         ShowFolderError(string.Empty);
         _installFolder = folder;
         InstallPathText.Text = folder;
+    }
+
+    //Opens the picker in the folder shown in the dialog, falling back to Documents if it doesn't exist yet
+    private async Task<IStorageFolder?> GetStartFolder()
+    {
+        if (Directory.Exists(_installFolder))
+        {
+            var current = await StorageProvider.TryGetFolderFromPathAsync(_installFolder);
+            if (current != null) return current;
+        }
+
+        return await StorageProvider.TryGetWellKnownFolderAsync(WellKnownFolder.Documents);
     }
 
     private void Save_Click(object? sender, RoutedEventArgs e)
