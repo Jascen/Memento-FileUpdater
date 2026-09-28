@@ -1,0 +1,40 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:FileUpdaterClient"
+        x:Class="FileUpdaterClient.SettingsDialog" x:DataType="vm:Preferences"
+        Title="Settings" Width="440" SizeToContent="Height" CanResize="False"
+        SystemDecorations="None" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="Transparent" TransparencyLevelHint="Transparent">
+    <Window.Resources>
+        <!-- Gold check boxes instead of the theme's blue -->
+        <Color x:Key="SystemAccentColor">#B8862F</Color>
+        <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillChecked" Color="#B8862F" />
+        <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" Color="#D9A953" />
+        <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPressed" Color="#9C6B2A" />
+        <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeChecked" Color="#B8862F" />
+        <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeCheckedPointerOver" Color="#D9A953" />
+        <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundChecked" Color="#1A1512" />
+        <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" Color="#1A1512" />
+    </Window.Resources>
+
+    <Window.Styles>
+        <Style Selector="CheckBox">
+            <Setter Property="Foreground" Value="#E8DCC0" />
+            <Setter Property="FontSize" Value="14" />
+        </Style>
+    </Window.Styles>
+
+    <Border Background="#F01A1512" BorderBrush="{StaticResource GoldBrush}" BorderThickness="3" CornerRadius="6"
+            Padding="24,20">
+        <StackPanel Spacing="14">
+            <TextBlock Text="Settings" FontFamily="{StaticResource DisplayFont}" FontSize="22" FontWeight="Bold"
+                       Foreground="#F3D58A" />
+            <CheckBox Content="Attempt to verify files on launch" IsChecked="{Binding VerifyOnLaunch}" />
+            <CheckBox Content="Warn when trying to play if verification fails" IsChecked="{Binding WarnIfNotVerified}" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,10,0,0">
+                <Button Content="Cancel" Classes="dialog secondary" Click="Cancel_Click" IsCancel="True" />
+                <Button Content="Save" Classes="dialog" Click="Save_Click" IsDefault="True" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

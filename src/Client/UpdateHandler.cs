@@ -18,6 +18,7 @@ public static class UpdateHandler
     private static MainViewModel data;
     private static double currentMaxProgress;
     private static int completedDownloads = 0;
+    private static int failedDownloads = 0;
     private static int isRunning; //Set while a check or download is in progress, so repeat clicks and Verify are ignored
     private static volatile bool stopAtFirstDifference;
     private static bool needsRecheck; //A cancelled run leaves the queues incomplete, so the next download starts from a fresh file list
@@ -67,7 +68,7 @@ public static class UpdateHandler
         }
         finally
         {
-            EndRun();
+            EndRun(wasDownload: false);
         }
     }
 
@@ -106,7 +107,7 @@ public static class UpdateHandler
         }
         finally
         {
-            EndRun();
+            EndRun(wasDownload: true);
         }
     }
 
@@ -116,8 +117,10 @@ public static class UpdateHandler
 
         if (cancellationToken.IsCancellationRequested) return;
 
+        var verified = Volatile.Read(ref failedDownloads) == 0; //Every file matched the server or was downloaded
         Dispatcher.UIThread.Post(() => //Ensure the final finished text is queued in case other text updates are already queued, making sure this is the last one ran.
         {
+            data.FilesVerified = verified;
             data.Progress = 100;
             data.FileProgress = 100;
             data.ProgressText = Settings.Finished;
@@ -137,9 +140,11 @@ public static class UpdateHandler
         downloadQueue.Clear();
         remoteFileListQueue.Clear();
         completedDownloads = 0;
+        failedDownloads = 0;
         totalBytesDownloaded = 0;
 
         data.IsUpdating = true;
+        data.FilesVerified = false;
         data.DownloadsReady = false;
         data.ErrorMessage = string.Empty;
         data.Progress = 0;
@@ -147,7 +152,7 @@ public static class UpdateHandler
         data.FileProgressText = string.Empty;
     }
 
-    private static void EndRun()
+    private static void EndRun(bool wasDownload)
     {
         var cancelled = cancellationToken.IsCancellationRequested;
         if (cancelled) needsRecheck = true;
@@ -155,9 +160,9 @@ public static class UpdateHandler
         {
             if (cancelled)
             {
-                //Offer the download again rather than letting the player launch with unchecked files
+                //A cancelled download leaves known out of date files, so offer it again. A cancelled check just leaves them unverified
                 data.ProgressText = Settings.Cancelled;
-                data.DownloadsReady = true;
+                data.DownloadsReady = wasDownload;
             }
             data.IsUpdating = false;
         });
@@ -183,6 +188,9 @@ public static class UpdateHandler
             Console.WriteLine(e.ToString());
             Dispatcher.UIThread.Post(() => data.ErrorMessage = Settings.TazUOError);
         }
+
+        var installed = TazUOSetup.IsInstalled;
+        Dispatcher.UIThread.Post(() => data.LauncherInstalled = installed);
     }
 
     private static async Task<bool> GetFileList()
@@ -364,6 +372,7 @@ public static class UpdateHandler
                         var fname = file.name;
                         Console.WriteLine($"Failed to download [{file.name}] after {MAX_ATTEMPTS} attempts, skipping..");
                         Dispatcher.UIThread.Post(() => data.ErrorMessage = string.Format(Settings.FileFailedError, fname));
+                        Interlocked.Increment(ref failedDownloads);
                         break;
                     }
 

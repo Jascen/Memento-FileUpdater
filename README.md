@@ -22,7 +22,7 @@ SimpleFileUpdater/
 1. Clone the repo
 2. Change `src/Client/resources/background.png` to your own background. The window is 900x675; other sizes are scaled to fill it.
 3. Change `src/Client/resources/icon.ico` to your own icon. Size isn't too important.
-4. Open `src/Client/Settings.cs` and update with your info (title, top links, game executable for the play button, bar colors).
+4. Open `src/Client/Settings.cs` and update with your info (title, top links, bar colors).
 5. Navigate to the client directory: `cd src/Client`
 6. Run in terminal/command prompt/powershell etc: `dotnet build -c Release`  
 

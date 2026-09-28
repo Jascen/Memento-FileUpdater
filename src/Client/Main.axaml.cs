@@ -10,7 +10,7 @@ namespace FileUpdaterClient;
 public partial class Main : Window
 {
     private MainViewModel _data;
-    private bool _updateStarted;
+    private bool _folderReady;
 
     public Main()
     {
@@ -23,6 +23,7 @@ public partial class Main : Window
     private async Task StartWhenFolderChosen()
     {
         InstallLocation.Load();
+        Preferences.Load();
         if (!InstallLocation.EnsureUsable(out var error))
         {
             //Wait for the player to pick another folder with the button instead of opening the picker on launch
@@ -39,8 +40,13 @@ public partial class Main : Window
     {
         _data.InstallPath = InstallLocation.Path;
         _data.ChangeFolderText = Settings.ChangeFolder;
-        _updateStarted = true;
-        await UpdateHandler.HandleUpdates(_data);
+        _folderReady = true;
+        _data.LauncherInstalled = TazUOSetup.IsInstalled;
+
+        if (Preferences.Current.VerifyOnLaunch)
+            await UpdateHandler.HandleUpdates(_data);
+        else
+            _data.ProgressText = Settings.NotVerified;
     }
 
     //Returns true once a usable folder is saved
@@ -77,12 +83,12 @@ public partial class Main : Window
         if (_data.DownloadsReady)
             await UpdateHandler.DownloadUpdates();
         else
-            Play();
+            await Play();
     }
 
     private async void ChangeFolder_Click(object? sender, RoutedEventArgs e)
     {
-        if (!_updateStarted)
+        if (!_folderReady)
         {
             //The default folder wasn't usable, so start the update once one is picked
             if (await ChooseFolder()) await StartUpdate();
@@ -111,21 +117,28 @@ public partial class Main : Window
 
         if (link.Target == NavLink.VerifyAction)
         {
-            if (_updateStarted) _ = UpdateHandler.HandleUpdates(_data);
+            if (_folderReady) _ = UpdateHandler.HandleUpdates(_data);
         }
         else
             OpenUrl(link.Target);
     }
 
-    private void Play()
+    //Opens the TazUO launcher, first asking the player to confirm if the files weren't fully verified
+    private async Task Play()
     {
+        if (!_data.FilesVerified && Preferences.Current.WarnIfNotVerified)
+        {
+            var dialog = new ConfirmDialog(Settings.UnverifiedTitle, Settings.UnverifiedMessage,
+                Settings.PlayAnyway, Settings.CancelText);
+            if (!await dialog.ShowDialog<bool>(this)) return;
+        }
+
         try
         {
-            var path = Path.GetFullPath(Settings.GameExecutable, InstallLocation.Path);
-            Process.Start(new ProcessStartInfo(path)
+            Process.Start(new ProcessStartInfo(TazUOSetup.LauncherExecutable)
             {
                 UseShellExecute = true,
-                WorkingDirectory = Path.GetDirectoryName(path)
+                WorkingDirectory = TazUOSetup.LauncherDirectory
             });
         }
         catch (Exception ex)
@@ -134,6 +147,8 @@ public partial class Main : Window
             Console.WriteLine(ex.Message);
         }
     }
+
+    private async void Settings_Click(object? sender, RoutedEventArgs e) => await new SettingsDialog().ShowDialog(this);
 
     private void Cancel_Click(object? sender, RoutedEventArgs e) => UpdateHandler.Cancel();
 

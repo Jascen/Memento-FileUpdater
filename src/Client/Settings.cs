@@ -25,8 +25,7 @@ public static class Settings
         new("Verify", NavLink.VerifyAction),
     ];
 
-    public const string PlayText = "PLAY NOW";
-    public const string GameExecutable = ""; //Path relative to the install folder, e.g. "client.exe". The play button stays disabled while this is empty
+    public const string PlayText = "PLAY NOW"; //Opens the TazUO launcher, enabled once it's installed
 
     public const string DefaultInstallFolder = "Client"; //Created next to the updater exe unless the player picks another folder
     public const string AppDataFolder = "UODiablo"; //Per-user folder that remembers the chosen install folder
@@ -60,7 +59,14 @@ public static class Settings
     public const string ChangeFolder = "Change";
     public const string ChooseFolder = "Choose install folder";
     public const string FileFailedError = "Failed to download [{0}] after several attempts, skipping.."; //{0} = file name
-    public const string LaunchError = "Unable to start the game."; //Play button couldn't start GameExecutable
+    public const string LaunchError = "Unable to start the TazUO launcher."; //Play button couldn't start it
+    public const string NotVerified = "Files not verified. Click Verify to check for updates."; //Shown when verifying on launch is turned off
+
+    //Popup when Play is clicked before the files were fully verified
+    public const string UnverifiedTitle = "Files not verified";
+    public const string UnverifiedMessage = "The status of your game files is unknown. They may be missing or out of date, which can cause problems in game.";
+    public const string PlayAnyway = "Play anyway";
+    public const string CancelText = "Cancel";
 }
 
 public record NavLink(string Label, string Target)

@@ -18,6 +18,8 @@ public class MainViewModel : INotifyPropertyChanged
     private string _progressText = "Checking for updates..";
     private string _fileProgressText = string.Empty;
     private bool _isUpdating;
+    private bool _filesVerified;
+    private bool _launcherInstalled;
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public IReadOnlyList<NavLink> Links { get; } = Settings.Links;
@@ -114,7 +116,25 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    public bool CanPlay => !IsUpdating && !DownloadsReady && !string.IsNullOrEmpty(Settings.GameExecutable);
+    /// <summary>True once every file was checked against the server and any updates downloaded.</summary>
+    public bool FilesVerified
+    {
+        get => _filesVerified;
+        set => SetField(ref _filesVerified, value);
+    }
+
+    public bool LauncherInstalled
+    {
+        get => _launcherInstalled;
+        set
+        {
+            if (!SetField(ref _launcherInstalled, value)) return;
+            OnPropertyChanged(nameof(CanPlay));
+            OnPropertyChanged(nameof(MainButtonEnabled));
+        }
+    }
+
+    public bool CanPlay => !IsUpdating && !DownloadsReady && LauncherInstalled;
 
     //The center button downloads pending updates first, then becomes the play button
     public string MainButtonText => DownloadsReady ? Settings.DownloadButton : Settings.PlayText;
