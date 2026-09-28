@@ -22,9 +22,16 @@ public partial class Main : Window
     private async Task StartWhenFolderChosen()
     {
         InstallLocation.Load();
-        if (!InstallLocation.IsSet && !await ChooseFolder()) return;
+        if (!InstallLocation.IsSet)
+        {
+            //Wait for the player to pick a folder with the button instead of opening the picker on launch
+            _data.ProgressText = Settings.NoFolderChosen;
+            _data.ChangeFolderText = Settings.ChooseFolder;
+            return;
+        }
 
         _data.InstallPath = InstallLocation.Path;
+        _data.ChangeFolderText = Settings.ChangeFolder;
         _updateStarted = true;
         await UpdateHandler.HandleUpdates(_data);
     }
@@ -44,7 +51,6 @@ public partial class Main : Window
             var folder = folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
             if (folder == null)
             {
-                if (!InstallLocation.IsSet) _data.ErrorMessage = Settings.NoFolderChosen;
                 return false;
             }
 
@@ -62,7 +68,7 @@ public partial class Main : Window
     {
         if (!_updateStarted)
         {
-            //No update running yet (the first-run picker was cancelled), so just start now
+            //No folder chosen yet, so start the update once one is picked
             if (await ChooseFolder()) await StartWhenFolderChosen();
             return;
         }
