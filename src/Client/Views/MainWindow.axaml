@@ -214,7 +214,7 @@
             <!-- Progress: blue = all files, red = current file -->
             <Grid Grid.Row="2" Height="170">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,34" Spacing="6">
-                    <Grid ColumnDefinitions="*,Auto" Width="520">
+                    <Grid ColumnDefinitions="*,Auto,Auto" Width="520">
                         <TextBlock Grid.Column="0" Text="{Binding ErrorMessage}" Foreground="#FF6B5E" FontSize="13"
                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                    IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
@@ -222,7 +222,9 @@
                                 <DropShadowEffect Color="Black" BlurRadius="4" OffsetX="0" OffsetY="1" Opacity="1" />
                             </TextBlock.Effect>
                         </TextBlock>
-                        <Button Grid.Column="1" Classes="chrome close" Width="22" Height="22" Click="Cancel_Click"
+                        <Button Grid.Column="1" Classes="dialog secondary" Content="{Binding RetryText}" Click="Retry_Click"
+                                IsVisible="{Binding RetryReady}" MinWidth="0" Padding="12,2" FontSize="12" Margin="8,0,0,0" />
+                        <Button Grid.Column="2" Classes="chrome close" Width="22" Height="22" Click="Cancel_Click"
                                 IsVisible="{Binding IsUpdating}" ToolTip.Tip="Cancel update">
                             <Path Data="M 0,0 L 8,8 M 8,0 L 0,8" Stroke="#E8D6B0" StrokeThickness="1.5" />
                         </Button>

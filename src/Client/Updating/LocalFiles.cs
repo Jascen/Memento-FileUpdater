@@ -35,6 +35,20 @@ public class LocalFiles(IFileSystem fileSystem)
 
     public Stream Create(string fileName) => fileSystem.File.Create(fileName);
 
+    public Stream OpenAppend(string fileName) => fileSystem.File.Open(fileName, FileMode.Append, FileAccess.Write);
+
+    public long Length(string fileName) => fileSystem.FileInfo.New(fileName).Length;
+
+    public DateTime LastWriteTimeUtc(string fileName) => fileSystem.File.GetLastWriteTimeUtc(fileName);
+
+    public string? ReadAllTextIfExists(string fileName) =>
+        fileSystem.File.Exists(fileName) ? fileSystem.File.ReadAllText(fileName) : null;
+
+    public void WriteAllText(string fileName, string contents) => fileSystem.File.WriteAllText(fileName, contents);
+
+    //True when another program has the file open, e.g. the game is running. Windows reports this as a sharing or lock violation
+    public static bool IsLocked(Exception e) => e is IOException { HResult: var hr } && (hr & 0xFFFF) is 32 or 33;
+
     public void Move(string source, string destination) => fileSystem.File.Move(source, destination, overwrite: true);
 
     public void DeleteIfExists(string fileName)

@@ -64,4 +64,33 @@ public class LocalFilesTests
         Assert.Equal("a.mul", entry.Name);
         Assert.Equal("abc", entry.Md5);
     }
+
+    [Fact]
+    public void FileEntryReadsSizeWhenPresent()
+    {
+        //Arrange
+        const string json = """[{"name":"a.mul","md5":"abc","size":42}]""";
+
+        //Act
+        var entries = JsonSerializer.Deserialize<FileEntry[]>(json)!;
+
+        //Assert
+        Assert.Equal(42, Assert.Single(entries).Size);
+    }
+
+    [Theory]
+    [InlineData(unchecked((int)0x80070020), true)] //ERROR_SHARING_VIOLATION
+    [InlineData(unchecked((int)0x80070021), true)] //ERROR_LOCK_VIOLATION
+    [InlineData(unchecked((int)0x80070005), false)] //Access denied
+    public void RecognizesFilesLockedByAnotherProgram(int hresult, bool expected)
+    {
+        //Arrange
+        var exception = new IOException("in use", hresult);
+
+        //Act
+        var locked = LocalFiles.IsLocked(exception);
+
+        //Assert
+        Assert.Equal(expected, locked);
+    }
 }

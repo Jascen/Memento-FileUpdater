@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.IO.Enumeration;
 
 namespace FileUpdaterClient.Updating;
 
@@ -16,6 +17,8 @@ public class UpdateService
     private readonly LocalFiles _localFiles;
     private readonly string _installPath;
     private readonly ILauncherInstaller? _launcher;
+    private readonly IReadOnlyCollection<string> _keepLocalFiles;
+    private readonly HashCache _hashes;
 
     private readonly ConcurrentQueue<FileEntry> _toCompare = new();
     private readonly ConcurrentQueue<FileEntry> _toDownload = new();
@@ -26,24 +29,37 @@ public class UpdateService
     private int _compareTotal;
     private int _downloadTotal;
     private int _completedDownloads;
-    private int _failedDownloads;
-    private long _totalBytesDownloaded;
+    private readonly ConcurrentQueue<string> _failedFiles = new();
+    private long _totalBytesDownloaded; //Bytes received this download phase, for the speed
+    private long _downloadTotalBytes; //Size of everything queued for download, 0 when the server doesn't send sizes
+    private long _finishedBytes; //Size of queued files that finished downloading or failed
+    private readonly ConcurrentDictionary<string, long> _inFlightBytes = new(); //Bytes so far of each file downloading now
     private DateTime _lastProgressTime = DateTime.MinValue;
 
     public event Action<UpdateProgress>? ProgressChanged;
     public event Action<FileProgress>? FileProgressChanged;
     public event Action<UpdateErrorInfo>? ErrorOccurred;
 
+    //How long to wait before each retry of a failed download: 1s, 2s, 4s, 8s. Tests set it to zero
+    public Func<int, TimeSpan> RetryDelay { get; init; } = attempt => TimeSpan.FromSeconds(1 << (attempt - 1));
+
     //True after a run finished with every file matching the server
     public bool FilesVerified { get; private set; }
 
-    //launcher is null when the TazUO launcher is turned off
-    public UpdateService(FileServerClient server, LocalFiles localFiles, string installPath, ILauncherInstaller? launcher)
+    //Files the last run couldn't download
+    public IReadOnlyCollection<string> FailedFiles => _failedFiles.ToArray();
+
+    //launcher is null when the TazUO launcher is turned off.
+    //keepLocalFiles are name patterns (e.g. "*.cfg") for files players change themselves: downloaded only when missing, never replaced
+    public UpdateService(FileServerClient server, LocalFiles localFiles, string installPath, ILauncherInstaller? launcher,
+        IReadOnlyCollection<string>? keepLocalFiles = null)
     {
         _server = server;
         _localFiles = localFiles;
         _installPath = installPath;
         _launcher = launcher;
+        _keepLocalFiles = keepLocalFiles ?? [];
+        _hashes = new HashCache(localFiles, installPath);
     }
 
     public void Cancel() => _cancellation.Cancel();
@@ -79,6 +95,7 @@ public class UpdateService
         if (_cancellation.IsCancellationRequested) _cancellation = new CancellationTokenSource();
         var token = _cancellation.Token;
         FilesVerified = false;
+        _failedFiles.Clear();
 
         try
         {
@@ -98,6 +115,10 @@ public class UpdateService
             ErrorOccurred?.Invoke(new UpdateErrorInfo(UpdateError.Unknown));
             _needsFileList = true;
             return UpdateResult.Failed;
+        }
+        finally
+        {
+            _hashes.Save();
         }
     }
 
@@ -129,7 +150,7 @@ public class UpdateService
         await SetUpLauncher(token);
         token.ThrowIfCancellationRequested();
 
-        FilesVerified = Volatile.Read(ref _failedDownloads) == 0; //Every file matched the server or was downloaded
+        FilesVerified = _failedFiles.IsEmpty; //Every file matched the server or was downloaded
         return UpdateResult.Finished;
     }
 
@@ -175,7 +196,7 @@ public class UpdateService
             LocalFiles.TryGetLocalPath(_installPath, file.Name, out var fullPath);
             if (_localFiles.Exists(fullPath))
             {
-                if (!file.Md5.Equals(_localFiles.ComputeMd5(fullPath), StringComparison.OrdinalIgnoreCase))
+                if (!KeepLocal(file.Name) && !MatchesServer(file, fullPath))
                 {
                     _toDownload.Enqueue(file);
                     Console.WriteLine($"[{file.Name}] does not match the version from the server, queued for download..");
@@ -191,6 +212,16 @@ public class UpdateService
         }
     }
 
+    private bool KeepLocal(string name) =>
+        _keepLocalFiles.Any(pattern => FileSystemName.MatchesSimpleExpression(pattern, name, ignoreCase: true));
+
+    //A different size means changed without hashing. Otherwise compare the MD5, reusing the cached one if the file hasn't changed
+    private bool MatchesServer(FileEntry file, string fullPath)
+    {
+        if (file.Size is long size && _localFiles.Length(fullPath) != size) return false;
+        return file.Md5.Equals(_hashes.GetMd5(file.Name, fullPath), StringComparison.OrdinalIgnoreCase);
+    }
+
     private void ReportCompareProgress() =>
         ProgressChanged?.Invoke(new UpdateProgress(UpdatePhase.Comparing, _compareTotal - _toCompare.Count, _compareTotal));
 
@@ -198,8 +229,10 @@ public class UpdateService
     {
         _downloadTotal = _toDownload.Count;
         _completedDownloads = 0;
-        _failedDownloads = 0;
         Interlocked.Exchange(ref _totalBytesDownloaded, 0);
+        Interlocked.Exchange(ref _finishedBytes, 0);
+        _inFlightBytes.Clear();
+        _downloadTotalBytes = _toDownload.All(f => f.Size != null) ? _toDownload.Sum(f => f.Size!.Value) : 0;
         if (_downloadTotal == 0) return;
 
         ProgressChanged?.Invoke(new UpdateProgress(UpdatePhase.Downloading, 0, _downloadTotal));
@@ -230,6 +263,7 @@ public class UpdateService
                     _localFiles.EnsureDirectory(filePath);
                     await _server.DownloadFileAsync(file, filePath,
                         (chunk, fileBytes, fileLength) => OnBytesDownloaded(file.Name, chunk, fileBytes, fileLength), token);
+                    _hashes.Set(file.Name, filePath, file.Md5); //Just checked, so the next check needn't hash it again
                     break;
                 }
                 catch (Exception ex)
@@ -239,18 +273,27 @@ public class UpdateService
 
                     Console.WriteLine(ex.ToString());
 
+                    if (LocalFiles.IsLocked(ex))
+                    {
+                        //Retrying won't help while the game has it open. The download is kept and finished on the next run
+                        Console.WriteLine($"[{file.Name}] is in use by another program, skipping..");
+                        ErrorOccurred?.Invoke(new UpdateErrorInfo(UpdateError.FileLocked, file.Name));
+                        _failedFiles.Enqueue(file.Name);
+                        break;
+                    }
+
                     if (attempt == MAX_ATTEMPTS)
                     {
                         Console.WriteLine($"Failed to download [{file.Name}] after {MAX_ATTEMPTS} attempts, skipping..");
                         ErrorOccurred?.Invoke(new UpdateErrorInfo(UpdateError.FileFailed, file.Name));
-                        Interlocked.Increment(ref _failedDownloads);
+                        _failedFiles.Enqueue(file.Name);
                         break;
                     }
 
-                    //Back off before retrying: 1s, 2s, 4s, 8s
+                    //Back off before retrying
                     try
                     {
-                        await Task.Delay(TimeSpan.FromSeconds(1 << (attempt - 1)), token);
+                        await Task.Delay(RetryDelay(attempt), token);
                     }
                     catch (OperationCanceledException)
                     {
@@ -263,6 +306,8 @@ public class UpdateService
                 return;
 
             Interlocked.Increment(ref _completedDownloads);
+            _inFlightBytes.TryRemove(file.Name, out _);
+            Interlocked.Add(ref _finishedBytes, file.Size ?? 0);
 
             // Final update after file is done
             FileProgressChanged?.Invoke(new FileProgress(file.Name, 100));
@@ -273,6 +318,7 @@ public class UpdateService
     private void OnBytesDownloaded(string fileName, int chunk, long fileBytes, long? fileLength)
     {
         Interlocked.Add(ref _totalBytesDownloaded, chunk);
+        _inFlightBytes[fileName] = fileBytes;
 
         // Limit updates to every 0.5 seconds
         if (DateTime.UtcNow - _lastProgressTime < ProgressInterval) return;
@@ -286,7 +332,10 @@ public class UpdateService
     {
         double elapsedSeconds = _downloadClock.Elapsed.TotalSeconds;
         double bytesPerSecond = elapsedSeconds > 0 ? Interlocked.Read(ref _totalBytesDownloaded) / elapsedSeconds : 0;
+        long bytesDone = _downloadTotalBytes > 0
+            ? Math.Min(_downloadTotalBytes, Interlocked.Read(ref _finishedBytes) + _inFlightBytes.Values.Sum())
+            : 0;
         ProgressChanged?.Invoke(new UpdateProgress(UpdatePhase.Downloading,
-            Volatile.Read(ref _completedDownloads), _downloadTotal, bytesPerSecond));
+            Volatile.Read(ref _completedDownloads), _downloadTotal, bytesPerSecond, bytesDone, _downloadTotalBytes));
     }
 }

@@ -70,6 +70,8 @@ public partial class MainWindow : Window, IMainView
 
     private void Cancel_Click(object? sender, RoutedEventArgs e) => _viewModel.CancelUpdate();
 
+    private async void Retry_Click(object? sender, RoutedEventArgs e) => await _viewModel.RetryAsync();
+
     private void Minimize_Click(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
     private void Close_Click(object? sender, RoutedEventArgs e) => Close();

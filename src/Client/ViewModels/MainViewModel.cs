@@ -20,6 +20,7 @@ public class MainViewModel : INotifyPropertyChanged
     private string _errorMessage = string.Empty;
     private bool _isDialogOpen;
     private bool _downloadsReady;
+    private bool _retryReady;
     private double _progress;
     private double _fileProgress;
     private string _progressText = Strings.CheckingForUpdates;
@@ -61,6 +62,15 @@ public class MainViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(MainButtonVisible));
         }
     }
+
+    /// <summary>True when the last run failed or skipped files, so a Retry button is shown next to the error.</summary>
+    public bool RetryReady
+    {
+        get => _retryReady;
+        private set => SetField(ref _retryReady, value);
+    }
+
+    public string RetryText => Strings.RetryText;
 
     /// <summary>Overall progress across all files (blue bar), 0-100.</summary>
     public double Progress
@@ -147,11 +157,15 @@ public class MainViewModel : INotifyPropertyChanged
         var installPath = InstallLocation.Path;
         _launcher = TazUOLauncherConfig.Enabled ? new TazUOLauncher(installPath) : null;
         var localFiles = new LocalFiles(new FileSystem());
-        _updates = new UpdateService(new FileServerClient(LauncherConfig.UpdateUrl, localFiles), localFiles, installPath, _launcher);
+        _updates = new UpdateService(new FileServerClient(LauncherConfig.UpdateUrl, localFiles), localFiles, installPath, _launcher,
+            LauncherConfig.KeepLocalFiles);
         _updates.ProgressChanged += progress => Dispatcher.UIThread.Post(() => ShowProgress(progress));
         _updates.FileProgressChanged += file => Dispatcher.UIThread.Post(() => ShowFileProgress(file));
         _updates.ErrorOccurred += error => Dispatcher.UIThread.Post(() => ShowError(error));
         LauncherInstalled = _launcher?.IsInstalled ?? false;
+        DownloadsReady = false; //Anything found for a previous folder no longer applies
+        RetryReady = false;
+        FilesVerified = false;
 
         if (Preferences.Current.VerifyOnLaunch)
             await CheckForUpdatesAsync();
@@ -159,20 +173,30 @@ public class MainViewModel : INotifyPropertyChanged
             ProgressText = Strings.NotVerified;
     }
 
-    public async Task CheckForUpdatesAsync()
+    public async Task<UpdateResult?> CheckForUpdatesAsync()
     {
-        if (_updates == null || IsUpdating) return; //No folder yet, or already checking
+        if (_updates == null || IsUpdating) return null; //No folder yet, or already checking
 
         IsUpdating = true;
         FilesVerified = false;
         DownloadsReady = false;
+        RetryReady = false;
         ErrorMessage = string.Empty;
         Progress = 0;
         FileProgress = 0;
         FileProgressText = string.Empty;
 
         var result = await _updates.CheckAsync();
-        Dispatcher.UIThread.Post(() => ShowResult(result, wasDownload: false)); //Queued behind any progress still waiting to be shown
+        await Dispatcher.UIThread.InvokeAsync(() => ShowResult(result, wasDownload: false)); //Queued behind any progress still waiting to be shown
+        return result;
+    }
+
+    //Checks again and, if anything is still missing or out of date, downloads it straight away
+    public async Task RetryAsync()
+    {
+        var result = await CheckForUpdatesAsync();
+        if (result is UpdateResult.UpdatesReady or UpdateResult.LauncherReady)
+            await DownloadUpdatesAsync();
     }
 
     //The center button downloads pending updates first, then launches the game
@@ -189,11 +213,13 @@ public class MainViewModel : INotifyPropertyChanged
         if (_updates == null || IsUpdating) return; //Ignore repeat clicks
 
         DownloadsReady = false;
+        RetryReady = false;
+        ErrorMessage = string.Empty;
         IsUpdating = true;
         FilesVerified = false;
 
         var result = await _updates.DownloadAsync();
-        Dispatcher.UIThread.Post(() => ShowResult(result, wasDownload: true));
+        await Dispatcher.UIThread.InvokeAsync(() => ShowResult(result, wasDownload: true));
     }
 
     //Opens the TazUO launcher, first asking the player to confirm if the files weren't fully verified
@@ -238,14 +264,14 @@ public class MainViewModel : INotifyPropertyChanged
         }
 
         ErrorMessage = string.Empty;
-        if (_updates == null)
+        if (!IsUpdating)
         {
-            //The default folder wasn't usable, so start now that one is picked
+            //Nothing running, so just start over with the new folder
             await StartWithFolderAsync();
             return;
         }
 
-        //The updater runs once per launch, so restart it to check the new folder
+        //A check or download is still using the old folder, so restart to be sure it's fully stopped
         CancelUpdate();
         _view.RestartApp();
     }
@@ -266,10 +292,10 @@ public class MainViewModel : INotifyPropertyChanged
                 break;
             case UpdatePhase.Downloading:
                 Progress = progress.Percent;
-                ProgressText = progress.Done >= progress.Total
-                    ? Strings.Finished
-                    : string.Format(Strings.DownloadingFiles, progress.Done, progress.Total,
-                        $"{progress.BytesPerSecond / 1024:F2} KB/s");
+                ProgressText = progress.BytesTotal > 0
+                    ? string.Format(Strings.DownloadingBytes, Units.Bytes(progress.BytesDone), Units.Bytes(progress.BytesTotal),
+                        Units.Speed(progress.BytesPerSecond), progress.TimeLeft is { } left ? Units.Duration(left) : "?")
+                    : string.Format(Strings.DownloadingFiles, progress.Done, progress.Total, Units.Speed(progress.BytesPerSecond));
                 break;
             case UpdatePhase.InstallingLauncher:
                 ProgressText = Strings.InstallingTazUO;
@@ -290,6 +316,7 @@ public class MainViewModel : INotifyPropertyChanged
             UpdateError.ConnectionFailed => Strings.ConError,
             UpdateError.BadData => Strings.BadData,
             UpdateError.FileFailed => string.Format(Strings.FileFailedError, error.FileName),
+            UpdateError.FileLocked => string.Format(Strings.FileLockedError, error.FileName),
             UpdateError.LauncherFailed => Strings.TazUOError,
             _ => Strings.UnknownError,
         };
@@ -306,11 +333,18 @@ public class MainViewModel : INotifyPropertyChanged
                 DownloadsReady = true;
                 break;
             case UpdateResult.Finished:
+                var failed = _updates?.FailedFiles.Count ?? 0;
                 FilesVerified = _updates?.FilesVerified ?? false;
                 Progress = 100;
                 FileProgress = 100;
-                ProgressText = Strings.Finished;
+                ProgressText = failed > 0 ? string.Format(Strings.FinishedWithFailures, failed) : Strings.Finished;
                 FileProgressText = string.Empty;
+                RetryReady = failed > 0;
+                break;
+            case UpdateResult.Failed:
+                //The error line says why. Downloads that were waiting are re-found by Retry
+                ProgressText = Strings.CheckFailed;
+                RetryReady = true;
                 break;
             case UpdateResult.Cancelled:
                 //A cancelled download leaves known out of date files, so offer it again. A cancelled check just leaves them unverified
