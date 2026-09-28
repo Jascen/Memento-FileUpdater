@@ -31,6 +31,9 @@ public static class Settings
     public const string ReqFileList = "Requesting file list from server..";
     public const string ComparingFiles = "Comparing your files to the server.. ({0}/{1})"; //{0} = current file, {1} = total files
     public const string InstallingTazUO = "Setting up the TazUO launcher..";
+    public const string UpdatesReady = "Updates are ready to download.";
+    public const string LauncherReady = "The TazUO launcher is ready to download.";
+    public const string DownloadButton = "Download updates";
     public const string DownloadingFiles = "Downloading files from the server.. ({0}/{1}) - ({2})"; //{0} = current file, {1} = total files, {2} dl speed
     
     public const string ConError = "Unable to connect to server."; //Failed connection to server

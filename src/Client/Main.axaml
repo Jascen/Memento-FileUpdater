@@ -35,6 +35,9 @@
                              Background="{x:Static vm:Settings.ProgressBarBackground}"
                              Foreground="{x:Static vm:Settings.ProgressBarForeground}" Opacity="0.75" />
                 <TextBlock Grid.Row="0" HorizontalAlignment="Center" Text="{Binding ProgressText}" Foreground="{x:Static vm:Settings.DefaultTextColor}" ZIndex="1" />
+                <Button Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,110,0,0"
+                        Content="{x:Static vm:Settings.DownloadButton}" Click="Download_Click"
+                        IsVisible="{Binding DownloadsReady}" FontSize="16" Padding="20,6" />
             </Grid>
         </Grid>
         <StackPanel Orientation="Horizontal" Spacing="8" Canvas.Left="10" Canvas.Bottom="8">
