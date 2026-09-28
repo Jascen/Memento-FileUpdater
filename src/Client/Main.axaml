@@ -37,5 +37,13 @@
                 <TextBlock Grid.Row="0" HorizontalAlignment="Center" Text="{Binding ProgressText}" Foreground="{x:Static vm:Settings.DefaultTextColor}" ZIndex="1" />
             </Grid>
         </Grid>
+        <StackPanel Orientation="Horizontal" Spacing="8" Canvas.Left="10" Canvas.Bottom="8">
+            <Button Content="{Binding ChangeFolderText}" Click="ChangeFolder_Click" FontSize="12" Padding="8,2" />
+            <TextBlock Text="Install Directory:" VerticalAlignment="Center" FontSize="12"
+                       IsVisible="{Binding InstallPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       Foreground="{x:Static vm:Settings.DefaultTextColor}" />
+            <TextBlock Text="{Binding InstallPath}" VerticalAlignment="Center" FontSize="12"
+                       Foreground="{x:Static vm:Settings.DefaultTextColor}" />
+        </StackPanel>
     </Canvas>
 </Window>

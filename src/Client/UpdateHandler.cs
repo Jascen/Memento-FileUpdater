@@ -24,7 +24,6 @@ public static class UpdateHandler
     private static DateTime lastUiUpdateTime = DateTime.MinValue;
     private static readonly CancellationTokenSource cancellationSource = new();
     private static readonly CancellationToken cancellationToken = cancellationSource.Token;
-    private static readonly string baseDirectory = Path.GetFullPath(AppDomain.CurrentDomain.BaseDirectory);
 
     public static async Task HandleUpdates(MainViewModel dataModel)
     {
@@ -39,6 +38,8 @@ public static class UpdateHandler
             client = new HttpClient(); //Must have new client for new timeout
             client.Timeout = TimeSpan.FromMinutes(15); //Download timeout
             await StartDownloading();
+
+            await SetUpTazUO();
 
             if (cancellationToken.IsCancellationRequested) return;
 
@@ -58,6 +59,22 @@ public static class UpdateHandler
     public static void Cancel()
     {
         cancellationSource.Cancel();
+    }
+
+    private static async Task SetUpTazUO()
+    {
+        if (cancellationToken.IsCancellationRequested) return;
+
+        Dispatcher.UIThread.Post(() => data.ProgressText = Settings.InstallingTazUO);
+        try
+        {
+            await TazUOSetup.EnsureInstalledAsync(cancellationToken);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e.ToString());
+            Dispatcher.UIThread.Post(() => data.ErrorMessage = Settings.TazUOError);
+        }
     }
 
     private static async Task<bool> GetFileList()
@@ -322,6 +339,7 @@ public static class UpdateHandler
     //Resolves a server-provided file name to a local path, rejecting any name that would land outside the client's folder
     private static bool TryGetLocalPath(string name, out string fullPath)
     {
+        var baseDirectory = Path.GetFullPath(InstallLocation.Path);
         fullPath = Path.GetFullPath(name, baseDirectory);
         var root = Path.TrimEndingDirectorySeparator(baseDirectory) + Path.DirectorySeparatorChar;
         return fullPath.StartsWith(root, OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase);
