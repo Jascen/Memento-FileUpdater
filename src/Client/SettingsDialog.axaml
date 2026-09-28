@@ -29,6 +29,21 @@
         <StackPanel Spacing="14">
             <TextBlock Text="Settings" FontFamily="{StaticResource DisplayFont}" FontSize="22" FontWeight="Bold"
                        Foreground="#F3D58A" />
+
+            <StackPanel Spacing="6">
+                <TextBlock Text="Install Directory" FontSize="14" FontWeight="SemiBold" Foreground="#E8DCC0" />
+                <Grid ColumnDefinitions="*,Auto">
+                    <Border Grid.Column="0" Background="#0F0C0A" BorderBrush="#5A4630" BorderThickness="1"
+                            CornerRadius="3" Padding="8,6" Margin="0,0,8,0">
+                        <TextBlock Name="InstallPathText" FontSize="12" Foreground="#CDBB92"
+                                   TextTrimming="PrefixCharacterEllipsis" VerticalAlignment="Center" />
+                    </Border>
+                    <Button Grid.Column="1" Name="ChangeFolderButton" Classes="dialog secondary" MinWidth="0"
+                            Padding="14,6" FontSize="13" Click="ChangeFolder_Click" />
+                </Grid>
+                <TextBlock Name="FolderErrorText" FontSize="12" Foreground="#FF6B5E" TextWrapping="Wrap" IsVisible="False" />
+            </StackPanel>
+
             <CheckBox Content="Attempt to verify files on launch" IsChecked="{Binding VerifyOnLaunch}" />
             <CheckBox Content="Warn when trying to play if verification fails" IsChecked="{Binding WarnIfNotVerified}" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,10,0,0">

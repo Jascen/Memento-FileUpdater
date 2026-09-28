@@ -10,8 +10,7 @@ public class MainViewModel : INotifyPropertyChanged
     private string _titleColor = Settings.TitleColor;
     private string _errorMessage = string.Empty;
     private string _subtitleColor = Settings.SubtitleColor;
-    private string _installPath = string.Empty;
-    private string _changeFolderText = Settings.ChangeFolder;
+    private bool _isDialogOpen;
     private bool _downloadsReady;
     private double _progress;
     private double _fileProgress;
@@ -54,16 +53,10 @@ public class MainViewModel : INotifyPropertyChanged
         set => SetField(ref _errorMessage, value);
     }
 
-    public string InstallPath
+    public bool IsDialogOpen
     {
-        get => _installPath;
-        set => SetField(ref _installPath, value);
-    }
-
-    public string ChangeFolderText
-    {
-        get => _changeFolderText;
-        set => SetField(ref _changeFolderText, value);
+        get => _isDialogOpen;
+        set => SetField(ref _isDialogOpen, value);
     }
 
     /// <summary>True once the launch check found updates, until the player clicks the main button to download them.</summary>

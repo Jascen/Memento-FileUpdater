@@ -54,10 +54,9 @@ public static class Settings
     public const string UnknownError = "An unknown error occured, please try again later.";
     public const string TazUOError = "Couldn't set up the TazUO launcher, it will be retried next time.";
     public const string ChooseFolderTitle = "Choose where to install UODiablo";
-    public const string NoFolderChosen = "Choose an install folder to continue.";
+    public const string NoFolderChosen = "Choose an install folder in Settings to continue.";
     public const string FolderNotWritable = "Can't write to {0}, please choose another folder."; //{0} = folder
     public const string ChangeFolder = "Change";
-    public const string ChooseFolder = "Choose install folder";
     public const string FileFailedError = "Failed to download [{0}] after several attempts, skipping.."; //{0} = file name
     public const string LaunchError = "Unable to start the TazUO launcher."; //Play button couldn't start it
     public const string NotVerified = "Files not verified. Click Verify to check for updates."; //Shown when verifying on launch is turned off

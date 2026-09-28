@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Platform.Storage;
 
 namespace FileUpdaterClient;
 
@@ -26,10 +25,10 @@ public partial class Main : Window
         Preferences.Load();
         if (!InstallLocation.EnsureUsable(out var error))
         {
-            //Wait for the player to pick another folder with the button instead of opening the picker on launch
+            //Ask for another folder in Settings before checking anything
             _data.ErrorMessage = error;
             _data.ProgressText = Settings.NoFolderChosen;
-            _data.ChangeFolderText = Settings.ChooseFolder;
+            await OpenSettings(error);
             return;
         }
 
@@ -38,8 +37,6 @@ public partial class Main : Window
 
     private async Task StartUpdate()
     {
-        _data.InstallPath = InstallLocation.Path;
-        _data.ChangeFolderText = Settings.ChangeFolder;
         _folderReady = true;
         _data.LauncherInstalled = TazUOSetup.IsInstalled;
 
@@ -47,34 +44,6 @@ public partial class Main : Window
             await UpdateHandler.HandleUpdates(_data);
         else
             _data.ProgressText = Settings.NotVerified;
-    }
-
-    //Returns true once a usable folder is saved
-    private async Task<bool> ChooseFolder()
-    {
-        while (true)
-        {
-            var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-            {
-                Title = Settings.ChooseFolderTitle,
-                AllowMultiple = false,
-                SuggestedStartLocation = await StorageProvider.TryGetWellKnownFolderAsync(WellKnownFolder.Documents),
-            });
-
-            var folder = folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
-            if (folder == null)
-            {
-                return false;
-            }
-
-            if (InstallLocation.TrySet(folder, out var error))
-            {
-                _data.ErrorMessage = string.Empty;
-                return true;
-            }
-
-            _data.ErrorMessage = error;
-        }
     }
 
     //The center button downloads pending updates first, then launches the game
@@ -86,22 +55,47 @@ public partial class Main : Window
             await Play();
     }
 
-    private async void ChangeFolder_Click(object? sender, RoutedEventArgs e)
+    private async void Settings_Click(object? sender, RoutedEventArgs e) => await OpenSettings();
+
+    private async Task OpenSettings(string folderError = "")
     {
-        if (!_folderReady)
+        var dialog = new SettingsDialog();
+        dialog.ShowFolderError(folderError);
+        var newFolder = await ShowModal(dialog.ShowDialog<string?>(this));
+        if (newFolder == null) return;
+
+        if (!InstallLocation.TrySet(newFolder, out var error))
         {
-            //The default folder wasn't usable, so start the update once one is picked
-            if (await ChooseFolder()) await StartUpdate();
+            _data.ErrorMessage = error;
             return;
         }
 
-        var previous = InstallLocation.Path;
-        if (!await ChooseFolder() || InstallLocation.Path == previous) return;
+        _data.ErrorMessage = string.Empty;
+        if (!_folderReady)
+        {
+            //The default folder wasn't usable, so start now that one is picked
+            await StartUpdate();
+            return;
+        }
 
         //The updater runs once per launch, so restart it to check the new folder
         UpdateHandler.Cancel();
         if (Environment.ProcessPath != null) Process.Start(Environment.ProcessPath);
         (Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown();
+    }
+
+    //Dims the launcher while a dialog is open
+    private async Task<T> ShowModal<T>(Task<T> dialog)
+    {
+        _data.IsDialogOpen = true;
+        try
+        {
+            return await dialog;
+        }
+        finally
+        {
+            _data.IsDialogOpen = false;
+        }
     }
 
     // The window has no system title bar, so let it be dragged from anywhere that isn't a control
@@ -130,7 +124,7 @@ public partial class Main : Window
         {
             var dialog = new ConfirmDialog(Settings.UnverifiedTitle, Settings.UnverifiedMessage,
                 Settings.PlayAnyway, Settings.CancelText);
-            if (!await dialog.ShowDialog<bool>(this)) return;
+            if (!await ShowModal(dialog.ShowDialog<bool>(this))) return;
         }
 
         try
@@ -147,8 +141,6 @@ public partial class Main : Window
             Console.WriteLine(ex.Message);
         }
     }
-
-    private async void Settings_Click(object? sender, RoutedEventArgs e) => await new SettingsDialog().ShowDialog(this);
 
     private void Cancel_Click(object? sender, RoutedEventArgs e) => UpdateHandler.Cancel();
 

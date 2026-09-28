@@ -174,7 +174,7 @@ All branding/configuration is in `src/Client/Settings.cs`:
 - `TotalProgressColor` (blue bar, progress across all files), `FileProgressColor` (red bar, current file download)
 - `Links`: Top navigation links (`NavLink(label, url)`); `NavLink.VerifyAction` as the target re-runs the file check
 - `DownloadButton`, `PlayText`: Center button; shows `DownloadButton` while updates are waiting, then `PlayText`, which opens the TazUO launcher once it is installed. If the files weren't fully verified it first asks the player to confirm (`UnverifiedTitle`, `UnverifiedMessage`)
-- Player settings (cog button, saved to `%AppData%/<AppDataFolder>/settings.json` by `Preferences.cs`): verify files on launch, and warn before playing with unverified files
+- Player settings (cog button, modal `SettingsDialog`): install directory (saved by `InstallLocation.cs`; changing it restarts the updater), plus verify files on launch and warn before playing with unverified files (saved to `%AppData%/<AppDataFolder>/settings.json` by `Preferences.cs`)
 - `UpdateUrl`: Server endpoint (must include trailing slash if using path segments)
 - `Finished`, `ReqFileList`, `ComparingFiles`, `DownloadingFiles`: Status messages (support `string.Format` placeholders)
 - Error messages: `ConError`, `BadData`, `UnknownError`, `FileFailedError`
