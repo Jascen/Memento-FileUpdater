@@ -22,14 +22,20 @@ public partial class Main : Window
     private async Task StartWhenFolderChosen()
     {
         InstallLocation.Load();
-        if (!InstallLocation.IsSet)
+        if (!InstallLocation.EnsureUsable(out var error))
         {
-            //Wait for the player to pick a folder with the button instead of opening the picker on launch
+            //Wait for the player to pick another folder with the button instead of opening the picker on launch
+            _data.ErrorMessage = error;
             _data.ProgressText = Settings.NoFolderChosen;
             _data.ChangeFolderText = Settings.ChooseFolder;
             return;
         }
 
+        await StartUpdate();
+    }
+
+    private async Task StartUpdate()
+    {
         _data.InstallPath = InstallLocation.Path;
         _data.ChangeFolderText = Settings.ChangeFolder;
         _updateStarted = true;
@@ -68,8 +74,8 @@ public partial class Main : Window
     {
         if (!_updateStarted)
         {
-            //No folder chosen yet, so start the update once one is picked
-            if (await ChooseFolder()) await StartWhenFolderChosen();
+            //The default folder wasn't usable, so start the update once one is picked
+            if (await ChooseFolder()) await StartUpdate();
             return;
         }
 

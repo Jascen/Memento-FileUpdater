@@ -16,6 +16,7 @@ public static class Settings
     
     public const string UpdateUrl = "http://127.0.0.1:8080/";
 
+    public const string DefaultInstallFolder = "Client"; //Created next to the updater exe unless the player picks another folder
     public const string AppDataFolder = "UODiablo"; //Per-user folder that remembers the chosen install folder
 
     //TazUO launcher is installed into this folder inside the install folder, with these profiles pre-created
