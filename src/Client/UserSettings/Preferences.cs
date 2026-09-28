@@ -1,12 +1,13 @@
 using System.Text.Json;
+using FileUpdaterClient.Config;
 
-namespace FileUpdaterClient;
+namespace FileUpdaterClient.UserSettings;
 
 //Player choices from the settings dialog, saved per user next to the install folder choice (e.g. %AppData%/UODiablo/settings.json)
 public class Preferences
 {
     private static readonly string ConfigPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), Settings.AppDataFolder, "settings.json");
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), LauncherConfig.AppDataFolder, "settings.json");
 
     public static Preferences Current { get; private set; } = new();
 

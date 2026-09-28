@@ -20,9 +20,9 @@ SimpleFileUpdater/
 
 ## Building and Customizing the client
 1. Clone the repo
-2. Change `src/Client/resources/background.png` to your own background. The window is 900x675; other sizes are scaled to fill it.
-3. Change `src/Client/resources/icon.ico` to your own icon. Size isn't too important.
-4. Open `src/Client/Settings.cs` and update with your info (title, top links, bar colors).
+2. Change `src/Client/Assets/background.png` to your own background. The window is 900x675; other sizes are scaled to fill it.
+3. Change `src/Client/Assets/icon.ico` to your own icon. Size isn't too important.
+4. Open `src/Client/Config/LauncherConfig.cs` and update with your info (title, server URL, top links, bar colors), `src/Client/Config/TazUOLauncherConfig.cs` to turn the TazUO launcher on or off and set its server profiles, and `src/Client/Config/Strings.cs` to change any on-screen text.
 5. Navigate to the client directory: `cd src/Client`
 6. Run in terminal/command prompt/powershell etc: `dotnet build -c Release`  
 

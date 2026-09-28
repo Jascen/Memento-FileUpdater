@@ -1,7 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 
-namespace FileUpdaterClient;
+namespace FileUpdaterClient.Views;
 
 //Themed yes/no popup. ShowDialog<bool> returns true when the player confirms
 public partial class ConfirmDialog : Window

@@ -1,8 +1,10 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using FileUpdaterClient.Config;
+using FileUpdaterClient.UserSettings;
 
-namespace FileUpdaterClient;
+namespace FileUpdaterClient.Views;
 
 //Edits a copy of the saved preferences and install folder so Cancel leaves them untouched.
 //ShowDialog<string?> returns the newly picked install folder when the player saves a different one, otherwise null
@@ -20,7 +22,7 @@ public partial class SettingsDialog : Window
             WarnIfNotVerified = Preferences.Current.WarnIfNotVerified,
         };
         InstallPathText.Text = _installFolder;
-        ChangeFolderButton.Content = Settings.ChangeFolder;
+        ChangeFolderButton.Content = Strings.ChangeFolder;
     }
 
     //Shows why the current folder can't be used, e.g. when the default folder isn't writable on first launch
@@ -34,7 +36,7 @@ public partial class SettingsDialog : Window
     {
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = Settings.ChooseFolderTitle,
+            Title = Strings.ChooseFolderTitle,
             AllowMultiple = false,
             SuggestedStartLocation = await GetStartFolder(),
         });

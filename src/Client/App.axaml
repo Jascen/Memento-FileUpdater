@@ -1,5 +1,5 @@
 <Application xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="FileUpdaterClient.MainWindow"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="FileUpdaterClient.App"
              RequestedThemeVariant="Dark">
     <!-- Shared by the main window and its dialogs -->
     <Application.Resources>
