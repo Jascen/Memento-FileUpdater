@@ -32,7 +32,9 @@ public static class LauncherConfig
     public static readonly string[] KeepLocalFiles = [];
 
     public const string DefaultInstallFolder = "Client"; //Created next to the updater exe unless the player picks another folder
-    public const string AppDataFolder = "UODiablo"; //Per-user folder that remembers the chosen install folder and preferences
+    //Per-user folder (e.g. %AppData%/UODiablo) that remembers the chosen install folder and preferences.
+    //Follows Title so each server's launcher keeps its own settings. Only set it separately if two launchers share a title
+    public const string AppDataFolder = Title;
 }
 
 public record NavLink(string Label, string Target)
