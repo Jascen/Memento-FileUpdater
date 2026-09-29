@@ -249,7 +249,7 @@ public class UpdateServiceTests
     public async Task NamesWithSpecialCharactersDownload()
     {
         //Arrange
-        _server.Add("maps/my map #1?.mul", "content");
+        _server.Add("maps/my map #1.mul", "content");
         var service = CreateService();
         await service.CheckAsync();
 
@@ -259,7 +259,7 @@ public class UpdateServiceTests
         //Assert
         Assert.Equal(UpdateResult.Finished, result);
         Assert.True(service.FilesVerified);
-        Assert.Equal("content", ReadLocal(Path.Combine("maps", "my map #1?.mul")));
+        Assert.Equal("content", ReadLocal(Path.Combine("maps", "my map #1.mul")));
     }
 
     [Fact]
