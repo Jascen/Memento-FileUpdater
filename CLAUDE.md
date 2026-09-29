@@ -27,13 +27,16 @@ SimpleFileUpdater/
 │   │   ├── *.csproj         # Project file
 │   │   └── *.sln            # Solution file
 │   ├── Client.Tests/        # xUnit tests for the update logic (Updating/, plus Fakes/ for the fake server and launcher)
-│   └── Server/              # C# .NET server application
-│       ├── Program.cs       # Main entry point with endpoints
-│       ├── ServerSettings.cs    # Configuration model
-│       ├── IniConfigProvider.cs # INI file parser
-│       ├── CacheService.cs      # Background cache service
-│       ├── FileUpdaterServer.csproj  # Project file
-│       └── settings.ini     # Server configuration file
+│   ├── Server/              # C# .NET server application
+│   │   ├── Program.cs       # Main entry point with endpoints
+│   │   ├── ServerSettings.cs    # Configuration model
+│   │   ├── IniConfigProvider.cs # INI file parser
+│   │   ├── CacheService.cs      # Background cache service (watches the files directory)
+│   │   ├── FileListBuilder.cs   # Builds the file list, reusing hashes of unchanged files
+│   │   ├── FileLoggerProvider.cs # Writes logs to LogFilePath
+│   │   ├── FileUpdaterServer.csproj  # Project file
+│   │   └── settings.ini     # Server configuration file
+│   └── Server.Tests/        # xUnit tests for the file list builder
 ├── README.md
 ├── LICENSE
 └── CLAUDE.md
@@ -81,6 +84,12 @@ Basic build:
 ```bash
 cd src/Server
 dotnet build -c Release
+```
+
+Tests (file list builder against an in-memory file system and fake clock):
+```bash
+cd src/Server.Tests
+dotnet test
 ```
 
 Platform-specific builds (creates self-contained single-file executables):
@@ -151,13 +160,19 @@ The server is an ASP.NET Core minimal API application with the following compone
 
 - **CacheService.cs**: Background service (implements `BackgroundService`)
   - Generates cache immediately on startup
-  - Regenerates cache periodically based on `CacheRegenerationInterval` setting
-  - Uses `SemaphoreSlim` for thread-safe cache regeneration
-  - Computes MD5 by streaming files (not loading into memory)
-  - Writes cache atomically (temp file + rename) to prevent corruption
+  - Watches `FilesDirectory` (`WatchFilesDirectory`) and rebuilds `FileSettleTime` seconds after a change (files still being written are rechecked until they settle)
+  - Rebuilds every `CacheRegenerationInterval` seconds as a fallback, and again after `FileSettleTime` when files were skipped
+  - Writes cache atomically (temp file + rename), and only when the list changed
+
+- **FileListBuilder.cs**: Builds the file list (`name`, `md5`, `size`)
+  - Remembers each file's size, modified time and MD5, so only new or changed files are hashed
+  - Leaves out files modified within `FileSettleTime`, open for writing elsewhere, or changed while being hashed
+  - Computes MD5 by streaming files (not loading into memory); file access goes through `IFileSystem` so tests use `MockFileSystem`
+
+- **FileLoggerProvider.cs**: Appends log lines to `LogFilePath` when it is set
 
 **HTTP Endpoints:**
-- **GET /**: Returns JSON array of all files in `files/` directory with their MD5 hashes
+- **GET /**: Returns JSON array of all files in `files/` directory with their MD5 hashes and sizes in bytes (`[{"name","md5","size"}]`)
   - Content-Type: `application/json`
   - CORS: Configurable via `CorsAllowedOrigins` setting
   - Returns cached data from `jsoncache.json`
@@ -181,7 +196,6 @@ The server is an ASP.NET Core minimal API application with the following compone
 **Performance Features:**
 - Files streamed to clients (not loaded into memory)
 - Response compression (gzip/brotli) for JSON responses
-- Configurable streaming buffer size
 - Async/await throughout for scalability
 - Cache regeneration in background thread doesn't block requests
 
@@ -216,7 +230,9 @@ All server configuration is in `src/Server/settings.ini`:
 **Files Section:**
 - `FilesDirectory`: Directory containing files to serve (default: ./files/)
 - `CacheFileName`: Cache file name (default: jsoncache.json)
-- `CacheRegenerationInterval`: Cache regeneration interval in seconds (default: 3600, 0 = disable)
+- `WatchFilesDirectory`: Rebuild the file list shortly after files change (default: true)
+- `FileSettleTime`: Seconds a file must go unmodified before it is published (default: 5)
+- `CacheRegenerationInterval`: Full rebuild interval in seconds, as a fallback to watching (default: 3600, 0 = disable)
 
 **Security Section:**
 - `CorsAllowedOrigins`: CORS origins (default: *, semicolon-separated for multiple)
@@ -225,11 +241,10 @@ All server configuration is in `src/Server/settings.ini`:
 
 **Logging Section:**
 - `LogLevel`: Minimum log level (default: Information)
-- `LogFilePath`: Log file path (empty = console only)
-- `EnableRequestLogging`: Log each request (default: true)
+- `LogFilePath`: Log file path, relative to the server (empty = console only)
+- `EnableRequestLogging`: Log one line per request (default: true)
 
 **Performance Section:**
-- `StreamBufferSize`: Streaming buffer size in bytes (default: 81920)
 - `EnableCompression`: Enable gzip/brotli compression (default: true)
 
 ## Key Implementation Details
@@ -252,7 +267,7 @@ All server configuration is in `src/Server/settings.ini`:
 - Download timeout: 15 minutes (`FileServerClient` keeps one `HttpClient` for each)
 
 ### MD5 Comparison
-- Server computes MD5 on startup and caches in `jsoncache.json`
+- Server computes MD5 on startup and caches in `jsoncache.json`, re-hashing only files whose size or modified time changed
 - Client computes MD5 for each local file during comparison phase
 - Files are queued for download if MD5 differs or file doesn't exist
 
@@ -273,7 +288,7 @@ All user-facing strings are in `src/Client/Config/Strings.cs`. Messages using fo
 Edit `settings.ini` in `src/Server/` directory and restart the server. All settings take effect on restart. The server automatically creates `files/` directory on first run.
 
 ### Testing Server Changes
-Place test files in the `files/` directory. The cache will regenerate automatically based on `CacheRegenerationInterval` (default: 1 hour), or restart the server for immediate cache refresh.
+Place test files in the `files/` directory. They appear in the file list about `FileSettleTime` seconds after they stop changing.
 
 ## Deployment Notes
 
