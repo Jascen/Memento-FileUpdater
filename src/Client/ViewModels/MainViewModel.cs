@@ -157,15 +157,24 @@ public class MainViewModel : INotifyPropertyChanged
         var installPath = InstallLocation.Path;
         _launcher = TazUOLauncherConfig.Enabled ? new TazUOLauncher(installPath) : null;
         var localFiles = new LocalFiles(new FileSystem());
-        _updates = new UpdateService(new FileServerClient(LauncherConfig.UpdateUrl, localFiles), localFiles, installPath, _launcher,
+        var updates = new UpdateService(new FileServerClient(LauncherConfig.UpdateUrl, localFiles), localFiles, installPath, _launcher,
             LauncherConfig.KeepLocalFiles);
-        _updates.ProgressChanged += progress => Dispatcher.UIThread.Post(() => ShowProgress(progress));
-        _updates.FileProgressChanged += file => Dispatcher.UIThread.Post(() => ShowFileProgress(file));
-        _updates.ErrorOccurred += error => Dispatcher.UIThread.Post(() => ShowError(error));
+        //A service that has been replaced (the folder changed) may still be winding down, so its updates are ignored
+        updates.ProgressChanged += progress => Dispatcher.UIThread.Post(() => { if (updates == _updates) ShowProgress(progress); });
+        updates.FileProgressChanged += file => Dispatcher.UIThread.Post(() => { if (updates == _updates) ShowFileProgress(file); });
+        updates.ErrorOccurred += error => Dispatcher.UIThread.Post(() => { if (updates == _updates) ShowError(error); });
+        _updates = updates;
         LauncherInstalled = _launcher?.IsInstalled ?? false;
-        DownloadsReady = false; //Anything found for a previous folder no longer applies
+
+        //Start from a clean slate, since nothing from a previous folder applies
+        IsUpdating = false;
+        DownloadsReady = false;
         RetryReady = false;
         FilesVerified = false;
+        ErrorMessage = string.Empty;
+        Progress = 0;
+        FileProgress = 0;
+        FileProgressText = string.Empty;
 
         if (Preferences.Current.VerifyOnLaunch)
             await CheckForUpdatesAsync();
@@ -186,7 +195,9 @@ public class MainViewModel : INotifyPropertyChanged
         FileProgress = 0;
         FileProgressText = string.Empty;
 
-        var result = await _updates.CheckAsync();
+        var updates = _updates;
+        var result = await updates.CheckAsync();
+        if (updates != _updates) return null; //The folder changed meanwhile, so this result is stale
         await Dispatcher.UIThread.InvokeAsync(() => ShowResult(result, wasDownload: false)); //Queued behind any progress still waiting to be shown
         return result;
     }
@@ -218,7 +229,9 @@ public class MainViewModel : INotifyPropertyChanged
         IsUpdating = true;
         FilesVerified = false;
 
-        var result = await _updates.DownloadAsync();
+        var updates = _updates;
+        var result = await updates.DownloadAsync();
+        if (updates != _updates) return; //The folder changed meanwhile, so this result is stale
         await Dispatcher.UIThread.InvokeAsync(() => ShowResult(result, wasDownload: true));
     }
 
@@ -263,17 +276,8 @@ public class MainViewModel : INotifyPropertyChanged
             return;
         }
 
-        ErrorMessage = string.Empty;
-        if (!IsUpdating)
-        {
-            //Nothing running, so just start over with the new folder
-            await StartWithFolderAsync();
-            return;
-        }
-
-        //A check or download is still using the old folder, so restart to be sure it's fully stopped
-        CancelUpdate();
-        _view.RestartApp();
+        CancelUpdate(); //Stop anything still working in the old folder
+        await StartWithFolderAsync();
     }
 
     public void CancelUpdate() => _updates?.Cancel();

@@ -118,7 +118,7 @@ Output location: `src/Server/bin/Release/net9.0/{runtime}/publish/`
 The client uses Avalonia UI framework with MVVM pattern:
 
 - **Entry Point**: `src/Client/Program.cs` → bootstraps Avalonia with `App`
-- **Application**: `App.axaml(.cs)` → shared styles/brushes, creates `MainViewModel` and `MainWindow`, `App.Restart()`
+- **Application**: `App.axaml(.cs)` → shared styles/brushes, creates `MainViewModel` and `MainWindow`
 - **Main Window**: `Views/MainWindow.axaml(.cs)` → view only. Forwards clicks to the view model and implements `IMainView` (settings/confirm dialogs, opening links, restarting), dimming the launcher while a dialog is open
 - **View Model**: `ViewModels/MainViewModel.cs` → launcher state and actions: startup (install folder, preferences, check on launch), Verify, the center Download/Play button, settings, cancel. Subscribes to `UpdateService` events and posts them to the UI thread
 - **Dialogs**: `Views/SettingsDialog` (install folder + preferences), `ConfirmDialog` (generic yes/no)
@@ -213,7 +213,7 @@ Branding/configuration is in `src/Client/Config/LauncherConfig.cs`, TazUO launch
 - `Links`: Top navigation links (`NavLink(label, url)`); `NavLink.VerifyAction` as the target re-runs the file check
 - `TazUOLauncherConfig.Enabled`: When false, the TazUO launcher is never downloaded, there is no Play Now button, and the play warning option is hidden from Settings
 - `DownloadButton`, `PlayText`: Center button; shows `DownloadButton` while updates are waiting, then `PlayText`, which opens the TazUO launcher once it is installed. If the files weren't fully verified it first asks the player to confirm (`UnverifiedTitle`, `UnverifiedMessage`)
-- Player settings (cog button, modal `SettingsDialog`): install directory (saved by `InstallLocation.cs`; changing it re-checks the new folder, or restarts the updater if a check or download is running), plus verify files on launch and warn before playing with unverified files (saved to `%AppData%/<AppDataFolder>/settings.json` by `Preferences.cs`)
+- Player settings (cog button, modal `SettingsDialog`): install directory (saved by `InstallLocation.cs`; changing it cancels anything running and re-checks the new folder), plus verify files on launch and warn before playing with unverified files (saved to `%AppData%/<AppDataFolder>/settings.json` by `Preferences.cs`)
 - `UpdateUrl`: Server endpoint (must include trailing slash if using path segments)
 - `Finished`, `ReqFileList`, `ComparingFiles`, `DownloadingFiles`: Status messages (support `string.Format` placeholders)
 - Error messages: `ConError`, `BadData`, `UnknownError`, `FileFailedError`, `FileLockedError`. After a failed check or failed files, the status reads `CheckFailed` or `FinishedWithFailures` and a Retry button (`RetryText`) appears next to the error

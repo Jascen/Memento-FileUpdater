@@ -35,8 +35,6 @@ public partial class MainWindow : Window, IMainView
 
     public void OpenUrl(Uri uri) => _ = Launcher.LaunchUriAsync(uri);
 
-    public void RestartApp() => App.Restart();
-
     //Dims the launcher while a dialog is open
     private async Task<T> ShowModal<T>(Task<T> dialog)
     {

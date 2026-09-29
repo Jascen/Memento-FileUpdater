@@ -9,6 +9,4 @@ public interface IMainView
     Task<bool> ConfirmAsync(string title, string message, string confirmText, string cancelText);
 
     void OpenUrl(Uri uri);
-
-    void RestartApp();
 }
