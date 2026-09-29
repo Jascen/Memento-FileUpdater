@@ -64,9 +64,12 @@ dotnet publish -c Release -r linux-x64
 
 # macOS (may need to run on Mac hardware)
 dotnet publish -c Release -r osx-x64
+dotnet publish -c Release -r osx-arm64
 ```
 
-Output location: `src/Client/bin/Release/net9.0/{runtime}/publish/`
+Output location: `src/Client/bin/Release/net9.0/{runtime}/publish/`. The exe is named by `<AssemblyName>` in `FileUpdaterClient.csproj` (default `UODiabloLauncher`); the root namespace stays `FileUpdaterClient`, and XAML refers to assets by relative path (`/Assets/...`) so renaming the exe doesn't break them.
+
+GitHub Actions: `.github/workflows/ci.yml` builds the client and server and runs the client tests on every push to main and every PR. `.github/workflows/release.yml` publishes the client for win-x64, linux-x64, osx-x64 and osx-arm64 and the server for win-x64 and linux-x64 when a `v*` tag is pushed (or by hand), and attaches the zips to a GitHub release.
 
 Tests (update logic against an in-memory fake server and file system):
 ```bash
@@ -202,7 +205,8 @@ The server is an ASP.NET Core minimal API application with the following compone
 ## Customization Points
 
 Branding/configuration is in `src/Client/Config/LauncherConfig.cs`, TazUO launcher settings in `src/Client/Config/TazUOLauncherConfig.cs`, and on-screen text in `src/Client/Config/Strings.cs`:
-- `Title`, `Subtitle`: Header text
+- `Title`, `Subtitle`: Header text. `AppDataFolder` (where player settings are saved) follows `Title`, so forks with different titles don't share settings
+- Exe name: `<AssemblyName>` in `src/Client/FileUpdaterClient.csproj`
 - `TitleColor`, `SubtitleColor`: Hex color strings for text
 - `DefaultTextColor`, `ProgressBarBackground`: Brush colors
 - `TotalProgressColor` (blue bar, progress across all files), `FileProgressColor` (red bar, current file download)
@@ -292,6 +296,7 @@ Place test files in the `files/` directory. They appear in the file list about `
 
 ## Deployment Notes
 
-- Client executable should be placed in the **same directory** where downloaded files will be stored (not a subdirectory)
+- This repo is meant to be forked per server: forks edit the files under `src/Client/Config/`, the exe name and the assets, then rebuild. Placeholder values in those files are expected, not bugs. The README has the checklist for forks
+- The client can live anywhere: game files go into `LauncherConfig.DefaultInstallFolder` (`Client`) next to the exe, or the folder the player picked in Settings
 - Client creates subdirectories automatically if server provides paths like `maps/map0.mul`
 - Server `files/` directory structure is mirrored on client side

@@ -1,13 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- Name of the exe players run (without .exe). Change this for your server -->
+    <AssemblyName>UODiabloLauncher</AssemblyName>
+    <RootNamespace>FileUpdaterClient</RootNamespace>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <ApplicationIcon>Assets/icon.ico</ApplicationIcon>
     <PublishSingleFile>true</PublishSingleFile>
-    <RuntimeIdentifiers>win-x64;linux-x64;osx-x64</RuntimeIdentifiers>
+    <RuntimeIdentifiers>win-x64;linux-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
     <SelfContained>true</SelfContained>
     <LangVersion>default</LangVersion>
   </PropertyGroup>

@@ -1,0 +1,58 @@
+name: Release
+
+# Builds the launcher for every platform and the server for Windows and Linux.
+# Push a tag like v1.0.0 to publish a GitHub release with the zips attached,
+# or run it by hand from the Actions tab to just get the zips as build artifacts.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { project: Client, rid: win-x64,     os: windows-latest }
+          - { project: Client, rid: linux-x64,   os: ubuntu-latest }
+          - { project: Client, rid: osx-x64,     os: macos-latest }
+          - { project: Client, rid: osx-arm64,   os: macos-latest }
+          - { project: Server, rid: win-x64,     os: windows-latest }
+          - { project: Server, rid: linux-x64,   os: ubuntu-latest }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Publish
+        shell: bash
+        run: dotnet publish src/${{ matrix.project }} -c Release -r ${{ matrix.rid }} --self-contained -o publish
+
+      - name: Zip
+        shell: bash
+        run: |
+          name="${{ matrix.project }}-${{ matrix.rid }}.zip"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            7z a "$name" ./publish/*
+          else
+            (cd publish && zip -r "../$name" .)
+          fi
+          echo "ZIP_NAME=$name" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ZIP_NAME }}
+          path: ${{ env.ZIP_NAME }}
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ZIP_NAME }}

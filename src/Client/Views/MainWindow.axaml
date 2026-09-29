@@ -137,7 +137,7 @@
 
     <Grid>
         <!-- Art -->
-        <Image Source="avares://FileUpdaterClient/Assets/background.png" Stretch="UniformToFill" />
+        <Image Source="/Assets/background.png" Stretch="UniformToFill" />
 
         <!-- Darken the edges and the top/bottom bands so text and controls stay readable over any art -->
         <Border IsHitTestVisible="False">
