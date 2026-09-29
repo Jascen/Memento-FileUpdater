@@ -15,10 +15,13 @@ public class UpdateServiceTests
 
     public UpdateServiceTests() => _fileSystem.Directory.CreateDirectory(InstallPath);
 
-    private UpdateService CreateService(ILauncherInstaller? launcher = null)
+    private UpdateService CreateService(ILauncherInstaller? launcher = null, string[]? keepLocalFiles = null)
     {
         var localFiles = new LocalFiles(_fileSystem);
-        return new UpdateService(new FileServerClient(Url, localFiles, _server), localFiles, InstallPath, launcher);
+        return new UpdateService(new FileServerClient(Url, localFiles, _server), localFiles, InstallPath, launcher, keepLocalFiles)
+        {
+            RetryDelay = _ => TimeSpan.Zero,
+        };
     }
 
     private void WriteLocal(string name, string content)
@@ -222,5 +225,163 @@ public class UpdateServiceTests
         //Assert
         Assert.Equal(UpdateResult.Finished, result);
         Assert.Equal("new", ReadLocal("a.mul"));
+    }
+
+    [Fact]
+    public async Task FilesThatKeepFailingAreReported()
+    {
+        //Arrange
+        _server.Add("a.mul", "new");
+        _server.FailuresBeforeSuccess = 5;
+        var service = CreateService();
+        await service.CheckAsync();
+
+        //Act
+        var result = await service.DownloadAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result);
+        Assert.False(service.FilesVerified);
+        Assert.Equal("a.mul", Assert.Single(service.FailedFiles));
+    }
+
+    [Fact]
+    public async Task NamesWithSpecialCharactersDownload()
+    {
+        //Arrange
+        _server.Add("maps/my map #1.mul", "content");
+        var service = CreateService();
+        await service.CheckAsync();
+
+        //Act
+        var result = await service.DownloadAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result);
+        Assert.True(service.FilesVerified);
+        Assert.Equal("content", ReadLocal(Path.Combine("maps", "my map #1.mul")));
+    }
+
+    [Fact]
+    public async Task KeptLocalFilesAreNotReplaced()
+    {
+        //Arrange
+        _server.Add("user.cfg", "server default");
+        WriteLocal("user.cfg", "player's own");
+        var service = CreateService(keepLocalFiles: ["*.cfg"]);
+
+        //Act
+        var result = await service.CheckAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result);
+        Assert.Equal("player's own", ReadLocal("user.cfg"));
+    }
+
+    [Fact]
+    public async Task MissingKeptLocalFilesAreDownloaded()
+    {
+        //Arrange
+        _server.Add("user.cfg", "server default");
+        var service = CreateService(keepLocalFiles: ["*.cfg"]);
+        await service.CheckAsync();
+
+        //Act
+        await service.DownloadAsync();
+
+        //Assert
+        Assert.Equal("server default", ReadLocal("user.cfg"));
+    }
+
+    [Fact]
+    public async Task PartialDownloadIsResumed()
+    {
+        //Arrange
+        _server.Add("a.mul", "0123456789");
+        WriteLocal("a.mul.part", "01234");
+        var service = CreateService();
+        await service.CheckAsync();
+
+        //Act
+        await service.DownloadAsync();
+
+        //Assert
+        Assert.Equal(5, Assert.Single(_server.RangeStarts));
+        Assert.Equal("0123456789", ReadLocal("a.mul"));
+        Assert.False(_fileSystem.File.Exists(_fileSystem.Path.Combine(InstallPath, "a.mul.part")));
+    }
+
+    [Fact]
+    public async Task DamagedPartialDownloadStartsOver()
+    {
+        //Arrange
+        _server.Add("a.mul", "0123456789");
+        WriteLocal("a.mul.part", "XXXXX");
+        var service = CreateService();
+        await service.CheckAsync();
+
+        //Act
+        await service.DownloadAsync();
+
+        //Assert
+        Assert.Equal(new long?[] { 5, null }, _server.RangeStarts);
+        Assert.Equal("0123456789", ReadLocal("a.mul"));
+    }
+
+    [Fact]
+    public async Task UnchangedFilesUseTheCachedHash()
+    {
+        //Arrange
+        _server.Add("a.mul", "same");
+        WriteLocal("a.mul", "same");
+        await CreateService().CheckAsync(); //Hashes a.mul and saves the cache
+        var cachePath = _fileSystem.Path.Combine(InstallPath, HashCache.FileName);
+        _fileSystem.File.WriteAllText(cachePath,
+            _fileSystem.File.ReadAllText(cachePath).Replace(FakeServer.Md5("same"), FakeServer.Md5("other")));
+
+        //Act
+        var result = await CreateService().CheckAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.UpdatesReady, result); //Trusted the (tampered) cache instead of re-hashing
+    }
+
+    [Fact]
+    public async Task ChangedFilesAreHashedAgain()
+    {
+        //Arrange
+        _server.Add("a.mul", "new");
+        WriteLocal("a.mul", "old");
+        await CreateService().CheckAsync();
+        WriteLocal("a.mul", "new");
+        _fileSystem.File.SetLastWriteTimeUtc(_fileSystem.Path.Combine(InstallPath, "a.mul"), DateTime.UtcNow.AddMinutes(1));
+
+        //Act
+        var result = await CreateService().CheckAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result);
+    }
+
+    [Fact]
+    public async Task ProgressCountsBytesWhenTheServerSendsSizes()
+    {
+        //Arrange
+        _server.IncludeSizes = true;
+        _server.Add("a.mul", "12345");
+        _server.Add("b.mul", "1234567890");
+        var service = CreateService();
+        await service.CheckAsync();
+        var progress = new List<UpdateProgress>();
+        service.ProgressChanged += p => { if (p.Phase == UpdatePhase.Downloading) lock (progress) progress.Add(p); };
+
+        //Act
+        await service.DownloadAsync();
+
+        //Assert
+        var last = progress.Last();
+        Assert.Equal(15, last.BytesTotal);
+        Assert.Equal(15, last.BytesDone);
+        Assert.Equal(100, last.Percent);
     }
 }

@@ -35,8 +35,6 @@ public partial class MainWindow : Window, IMainView
 
     public void OpenUrl(Uri uri) => _ = Launcher.LaunchUriAsync(uri);
 
-    public void RestartApp() => App.Restart();
-
     //Dims the launcher while a dialog is open
     private async Task<T> ShowModal<T>(Task<T> dialog)
     {
@@ -69,6 +67,8 @@ public partial class MainWindow : Window, IMainView
     private async void Settings_Click(object? sender, RoutedEventArgs e) => await _viewModel.OpenSettingsAsync();
 
     private void Cancel_Click(object? sender, RoutedEventArgs e) => _viewModel.CancelUpdate();
+
+    private async void Retry_Click(object? sender, RoutedEventArgs e) => await _viewModel.RetryAsync();
 
     private void Minimize_Click(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 

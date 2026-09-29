@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http.Headers;
 using System.Text.Json;
 
 namespace FileUpdaterClient.Updating;
@@ -84,53 +86,72 @@ public class FileServerClient
         }
     }
 
-    //Downloads to a temporary file first so a failed or cancelled download never leaves a partial file in place.
+    //Downloads to a temporary .part file first so a failed or cancelled download never leaves a partial file in place.
+    //A .part left by an earlier attempt is resumed with a Range request instead of starting over.
     //onBytes is called after each chunk with (chunk size, bytes of this file so far, file length if the server sent it)
     public async Task DownloadFileAsync(FileEntry file, string filePath, Action<int, long, long?> onBytes,
         CancellationToken cancellationToken)
     {
         var tempPath = filePath + ".part";
-        try
+        long resumeFrom = _localFiles.Exists(tempPath) ? _localFiles.Length(tempPath) : 0;
+        if (resumeFrom > 0 && resumeFrom == file.Size)
         {
-            Uri updateUrl = new Uri(_baseUrl + "/file/" + file.Name);
-
-            using var response = await _downloadClient.GetAsync(updateUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-            response.EnsureSuccessStatusCode();
-            long? fileLength = response.Content.Headers.ContentLength;
-            long fileBytesDownloaded = 0;
-
-            using (var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken))
-            using (var fileStream = _localFiles.Create(tempPath))
-            {
-                byte[] buffer = new byte[BufferSize];
-                int bytesRead;
-
-                while ((bytesRead = await responseStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0)
-                {
-                    await fileStream.WriteAsync(buffer, 0, bytesRead, cancellationToken);
-                    fileBytesDownloaded += bytesRead;
-                    onBytes(bytesRead, fileBytesDownloaded, fileLength);
-                }
-            }
-
-            //Reject truncated or changed downloads so they are retried instead of replacing the local file
-            var downloadedMd5 = _localFiles.ComputeMd5(tempPath);
-            if (!file.Md5.Equals(downloadedMd5, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException(
-                    $"[{file.Name}] hash mismatch after download (expected {file.Md5}, got {downloadedMd5})");
-
-            _localFiles.Move(tempPath, filePath);
+            //Fully downloaded earlier but never moved into place, e.g. the file was locked
+            VerifyAndMove(file, tempPath, filePath);
+            return;
         }
-        finally
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, FileUrl(file.Name));
+        if (resumeFrom > 0)
+            request.Headers.Range = new RangeHeaderValue(resumeFrom, null);
+
+        using var response = await _downloadClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
         {
-            try
+            //The .part is already as long as the file (or longer), so it can't be resumed. Start over on the next attempt
+            _localFiles.DeleteIfExists(tempPath);
+            throw new InvalidDataException($"[{file.Name}] partial download can't be resumed");
+        }
+
+        response.EnsureSuccessStatusCode();
+        if (response.StatusCode != HttpStatusCode.PartialContent)
+            resumeFrom = 0; //Server sent the whole file
+
+        long? fileLength = response.Content.Headers.ContentLength + resumeFrom;
+        long fileBytesDownloaded = resumeFrom;
+
+        using (var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken))
+        using (var fileStream = resumeFrom > 0 ? _localFiles.OpenAppend(tempPath) : _localFiles.Create(tempPath))
+        {
+            byte[] buffer = new byte[BufferSize];
+            int bytesRead;
+
+            while ((bytesRead = await responseStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0)
             {
-                _localFiles.DeleteIfExists(tempPath);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine($"Could not remove partial download [{tempPath}]: {e.Message}");
+                await fileStream.WriteAsync(buffer, 0, bytesRead, cancellationToken);
+                fileBytesDownloaded += bytesRead;
+                onBytes(bytesRead, fileBytesDownloaded, fileLength);
             }
         }
+
+        VerifyAndMove(file, tempPath, filePath);
     }
+
+    //Rejects truncated or changed downloads so they are retried from scratch instead of replacing the local file
+    private void VerifyAndMove(FileEntry file, string tempPath, string filePath)
+    {
+        var downloadedMd5 = _localFiles.ComputeMd5(tempPath);
+        if (!file.Md5.Equals(downloadedMd5, StringComparison.OrdinalIgnoreCase))
+        {
+            _localFiles.DeleteIfExists(tempPath);
+            throw new InvalidDataException(
+                $"[{file.Name}] hash mismatch after download (expected {file.Md5}, got {downloadedMd5})");
+        }
+
+        _localFiles.Move(tempPath, filePath);
+    }
+
+    //Escapes each part of the name so files with spaces, # or ? in their names download correctly
+    private Uri FileUrl(string name) =>
+        new(_baseUrl + "/file/" + string.Join("/", name.Split('/').Select(Uri.EscapeDataString)));
 }

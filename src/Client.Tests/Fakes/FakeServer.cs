@@ -12,7 +12,9 @@ public class FakeServer : HttpMessageHandler
     public int FailuresBeforeSuccess { get; set; } //Fails this many file downloads first, to exercise retries
     public HttpStatusCode? ListStatus { get; set; }
     public string? RawList { get; set; }
+    public bool IncludeSizes { get; set; } //Adds "size" to the file list, like newer servers
     public List<string> Downloads { get; } = new();
+    public List<long?> RangeStarts { get; } = new(); //Start of each download's Range header, null when it asked for the whole file
 
     public void Add(string name, string content) => _files[name] = Encoding.UTF8.GetBytes(content);
 
@@ -29,7 +31,8 @@ public class FakeServer : HttpMessageHandler
             {
                 name = f.Key,
                 md5 = Convert.ToHexString(MD5.HashData(f.Value)).ToLowerInvariant(),
-            }));
+                size = IncludeSizes ? f.Value.Length : (long?)null,
+            }), new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(list) });
         }
 
@@ -41,8 +44,18 @@ public class FakeServer : HttpMessageHandler
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
         }
 
-        return Task.FromResult(_files.TryGetValue(name, out var bytes)
-            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(bytes) }
-            : new HttpResponseMessage(HttpStatusCode.NotFound));
+        var rangeStart = request.Headers.Range?.Ranges.First().From;
+        RangeStarts.Add(rangeStart);
+        if (!_files.TryGetValue(name, out var bytes))
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        if (rangeStart == null)
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(bytes) });
+        if (rangeStart >= bytes.Length)
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.RequestedRangeNotSatisfiable));
+
+        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.PartialContent)
+        {
+            Content = new ByteArrayContent(bytes[(int)rangeStart.Value..]),
+        });
     }
 }

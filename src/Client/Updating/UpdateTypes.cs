@@ -8,10 +8,17 @@ public enum UpdatePhase
     InstallingLauncher,
 }
 
-//Overall progress of a check or download. Done/Total count files, BytesPerSecond is only set while downloading
-public record UpdateProgress(UpdatePhase Phase, int Done, int Total, double BytesPerSecond = 0)
+//Overall progress of a check or download. Done/Total count files. BytesPerSecond is only set while downloading,
+//and BytesDone/BytesTotal only when the server sent every queued file's size
+public record UpdateProgress(UpdatePhase Phase, int Done, int Total, double BytesPerSecond = 0, long BytesDone = 0, long BytesTotal = 0)
 {
-    public double Percent => Total > 0 ? Done * 100.0 / Total : 0;
+    public double Percent => BytesTotal > 0 ? BytesDone * 100.0 / BytesTotal
+        : Total > 0 ? Done * 100.0 / Total : 0;
+
+    //Estimated time left in the download, null when there's no size or speed to go on yet
+    public TimeSpan? TimeLeft => BytesTotal > 0 && BytesPerSecond > 0
+        ? TimeSpan.FromSeconds((BytesTotal - BytesDone) / BytesPerSecond)
+        : null;
 }
 
 //Progress of the single file currently downloading
@@ -23,6 +30,7 @@ public enum UpdateError
     BadData,
     Unknown,
     FileFailed, //FileName says which file
+    FileLocked, //FileName is open in another program, usually the game
     LauncherFailed,
 }
 

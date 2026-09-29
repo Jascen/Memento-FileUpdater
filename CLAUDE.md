@@ -118,7 +118,7 @@ Output location: `src/Server/bin/Release/net9.0/{runtime}/publish/`
 The client uses Avalonia UI framework with MVVM pattern:
 
 - **Entry Point**: `src/Client/Program.cs` → bootstraps Avalonia with `App`
-- **Application**: `App.axaml(.cs)` → shared styles/brushes, creates `MainViewModel` and `MainWindow`, `App.Restart()`
+- **Application**: `App.axaml(.cs)` → shared styles/brushes, creates `MainViewModel` and `MainWindow`
 - **Main Window**: `Views/MainWindow.axaml(.cs)` → view only. Forwards clicks to the view model and implements `IMainView` (settings/confirm dialogs, opening links, restarting), dimming the launcher while a dialog is open
 - **View Model**: `ViewModels/MainViewModel.cs` → launcher state and actions: startup (install folder, preferences, check on launch), Verify, the center Download/Play button, settings, cancel. Subscribes to `UpdateService` events and posts them to the UI thread
 - **Dialogs**: `Views/SettingsDialog` (install folder + preferences), `ConfirmDialog` (generic yes/no)
@@ -130,7 +130,7 @@ The client uses Avalonia UI framework with MVVM pattern:
 
 No Avalonia or UI code, so it can be tested on its own:
 
-- `FileServerClient` → HTTP: fetches the file list (5s timeout) and downloads a file to `.part`, checks its MD5, then moves it into place (15 min timeout). Takes an optional `HttpMessageHandler` so tests can fake the server, and writes files through `LocalFiles`
+- `FileServerClient` → HTTP: fetches the file list (5s timeout) and downloads a file to `.part`, checks its MD5, then moves it into place (15 min timeout). A `.part` left by a failed or cancelled attempt is resumed with a Range request; one that fails the MD5 check is deleted so the next attempt starts over. File names are URL-escaped per path segment. Takes an optional `HttpMessageHandler` so tests can fake the server, and writes files through `LocalFiles`
 - `LocalFiles` → path safety (`TryGetLocalPath` rejects names outside the install folder), MD5, directory creation and file writes. All file access goes through an injected `IFileSystem` (System.IO.Abstractions): the app passes `new FileSystem()`, tests pass a `MockFileSystem`
 - `UpdateService` → one instance per install folder:
   1. **CheckAsync()**: fetches the file list and compares local MD5s with `WORKER_COUNT` (2) workers, stopping at the first difference. Returns `UpdatesReady`, `LauncherReady` (TazUO missing), `Finished`, `Failed` or `Cancelled`; nothing is downloaded
@@ -213,10 +213,11 @@ Branding/configuration is in `src/Client/Config/LauncherConfig.cs`, TazUO launch
 - `Links`: Top navigation links (`NavLink(label, url)`); `NavLink.VerifyAction` as the target re-runs the file check
 - `TazUOLauncherConfig.Enabled`: When false, the TazUO launcher is never downloaded, there is no Play Now button, and the play warning option is hidden from Settings
 - `DownloadButton`, `PlayText`: Center button; shows `DownloadButton` while updates are waiting, then `PlayText`, which opens the TazUO launcher once it is installed. If the files weren't fully verified it first asks the player to confirm (`UnverifiedTitle`, `UnverifiedMessage`)
-- Player settings (cog button, modal `SettingsDialog`): install directory (saved by `InstallLocation.cs`; changing it restarts the updater), plus verify files on launch and warn before playing with unverified files (saved to `%AppData%/<AppDataFolder>/settings.json` by `Preferences.cs`)
+- Player settings (cog button, modal `SettingsDialog`): install directory (saved by `InstallLocation.cs`; changing it cancels anything running and re-checks the new folder), plus verify files on launch and warn before playing with unverified files (saved to `%AppData%/<AppDataFolder>/settings.json` by `Preferences.cs`)
 - `UpdateUrl`: Server endpoint (must include trailing slash if using path segments)
 - `Finished`, `ReqFileList`, `ComparingFiles`, `DownloadingFiles`: Status messages (support `string.Format` placeholders)
-- Error messages: `ConError`, `BadData`, `UnknownError`, `FileFailedError`
+- Error messages: `ConError`, `BadData`, `UnknownError`, `FileFailedError`, `FileLockedError`. After a failed check or failed files, the status reads `CheckFailed` or `FinishedWithFailures` and a Retry button (`RetryText`) appears next to the error
+- `KeepLocalFiles` (`LauncherConfig`): name patterns like `*.cfg` for files players change themselves; downloaded when missing, never replaced
 
 Visual assets:
 - `src/Client/Assets/background.png`: Background image (window is 900x675, borderless)
@@ -261,7 +262,8 @@ All server configuration is in `src/Server/settings.ini`:
 
 ### File Download Strategy
 - 81920-byte buffer size for streaming downloads
-- Up to 5 attempts per file, retried in the same worker with a 1s, 2s, 4s, 8s backoff
+- Up to 5 attempts per file, retried in the same worker with a 1s, 2s, 4s, 8s backoff (`UpdateService.RetryDelay`, zero in tests). A file another program has open (the game) isn't retried; it's reported with `FileLockedError`
+- When the server's list includes `size`, progress, the status text and the time left are by bytes (`DownloadingBytes`); otherwise by file count (`DownloadingFiles`). `Units` formats sizes, speeds and durations
 - Download speed calculation based on cumulative bytes/time across all workers
 - UI updates throttled to 0.5-second intervals during downloads
 - Automatic directory creation for nested paths
@@ -272,8 +274,8 @@ All server configuration is in `src/Server/settings.ini`:
 
 ### MD5 Comparison
 - Server computes MD5 on startup and caches in `jsoncache.json`, re-hashing only files whose size or modified time changed
-- Client computes MD5 for each local file during comparison phase
-- Files are queued for download if MD5 differs or file doesn't exist
+- Client compares each local file during the comparison phase: a size different from the server's `size` (when sent) means changed without hashing; otherwise the MD5 comes from `HashCache` (`.launcher-hashes.json` in the install folder) when the file's size and modified time are unchanged since it was last hashed, and is computed otherwise
+- Files are queued for download if MD5 differs or file doesn't exist, except `KeepLocalFiles` matches, which are only downloaded when missing
 
 ## Common Development Scenarios
 

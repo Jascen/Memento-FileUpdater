@@ -27,6 +27,10 @@ public static class LauncherConfig
         new("Verify", NavLink.VerifyAction),
     ];
 
+    //Files players change themselves, like their own settings: downloaded when missing but never replaced once they exist.
+    //Patterns are matched against the server's file names, e.g. "*.cfg" or "Data/Macros.txt"
+    public static readonly string[] KeepLocalFiles = [];
+
     public const string DefaultInstallFolder = "Client"; //Created next to the updater exe unless the player picks another folder
     //Per-user folder (e.g. %AppData%/UODiablo) that remembers the chosen install folder and preferences.
     //Follows Title so each server's launcher keeps its own settings. Only set it separately if two launchers share a title
