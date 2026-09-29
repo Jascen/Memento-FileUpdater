@@ -12,7 +12,6 @@ public class ServerSettings
     public string CacheFileName { get; set; } = "jsoncache.json";
     public int CacheRegenerationInterval { get; set; } = 3600;
     public bool WatchFilesDirectory { get; set; } = true;
-    public int ChangeDelay { get; set; } = 2; // seconds of quiet after a change before the list is rebuilt
     public int FileSettleTime { get; set; } = 5; // seconds a file must go unmodified before it is published
 
     // Security section

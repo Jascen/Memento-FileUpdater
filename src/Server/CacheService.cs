@@ -8,9 +8,6 @@ namespace FileUpdaterServer;
 //anything in the directory changes, and on the CacheRegenerationInterval as a safety net
 public class CacheService : BackgroundService
 {
-    //A directory that never goes quiet (a log being written, say) still gets rebuilt this often
-    private static readonly TimeSpan MaxChangeWait = TimeSpan.FromSeconds(30);
-
     private readonly ServerSettings _settings;
     private readonly ILogger<CacheService> _logger;
     private readonly FileListBuilder _builder;
@@ -40,36 +37,24 @@ public class CacheService : BackgroundService
             ? TimeSpan.FromSeconds(_settings.CacheRegenerationInterval)
             : Timeout.InfiniteTimeSpan;
         var settleTime = TimeSpan.FromSeconds(Math.Max(1, _settings.FileSettleTime));
-        var changeDelay = TimeSpan.FromSeconds(Math.Max(0, _settings.ChangeDelay));
 
         try
         {
             var skipped = await RegenerateCacheAsync(stoppingToken);
-            var nextFullRun = DateTime.UtcNow + interval;
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                //Come back for skipped files once they have had time to finish copying
-                var wait = skipped ? settleTime : Timeout.InfiniteTimeSpan;
-                if (interval != Timeout.InfiniteTimeSpan)
+                //Skipped files are checked again once they have had time to finish copying
+                if (await WaitForChangeAsync(skipped ? settleTime : interval, stoppingToken))
                 {
-                    var untilFullRun = nextFullRun - DateTime.UtcNow;
-                    if (untilFullRun < TimeSpan.Zero) untilFullRun = TimeSpan.Zero;
-                    if (wait == Timeout.InfiniteTimeSpan || untilFullRun < wait) wait = untilFullRun;
-                }
-
-                if (await WaitForChangeAsync(wait, stoppingToken))
-                {
-                    //Let a copy finish before rebuilding
-                    var started = DateTime.UtcNow;
-                    while (DateTime.UtcNow - started < MaxChangeWait && await WaitForChangeAsync(changeDelay, stoppingToken))
+                    //A rebuild during a copy only skips the file, so a short pause is enough to batch the events
+                    await Task.Delay(settleTime, stoppingToken);
+                    while (_changes.Reader.TryRead(out _))
                     {
                     }
                 }
 
                 skipped = await RegenerateCacheAsync(stoppingToken);
-                if (DateTime.UtcNow >= nextFullRun)
-                    nextFullRun = DateTime.UtcNow + interval;
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

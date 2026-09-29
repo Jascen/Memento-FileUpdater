@@ -160,7 +160,7 @@ The server is an ASP.NET Core minimal API application with the following compone
 
 - **CacheService.cs**: Background service (implements `BackgroundService`)
   - Generates cache immediately on startup
-  - Watches `FilesDirectory` (`WatchFilesDirectory`) and rebuilds once changes have been quiet for `ChangeDelay` seconds
+  - Watches `FilesDirectory` (`WatchFilesDirectory`) and rebuilds `FileSettleTime` seconds after a change (files still being written are rechecked until they settle)
   - Rebuilds every `CacheRegenerationInterval` seconds as a fallback, and again after `FileSettleTime` when files were skipped
   - Writes cache atomically (temp file + rename), and only when the list changed
 
@@ -231,7 +231,6 @@ All server configuration is in `src/Server/settings.ini`:
 - `FilesDirectory`: Directory containing files to serve (default: ./files/)
 - `CacheFileName`: Cache file name (default: jsoncache.json)
 - `WatchFilesDirectory`: Rebuild the file list shortly after files change (default: true)
-- `ChangeDelay`: Seconds of quiet after a change before rebuilding (default: 2)
 - `FileSettleTime`: Seconds a file must go unmodified before it is published (default: 5)
 - `CacheRegenerationInterval`: Full rebuild interval in seconds, as a fallback to watching (default: 3600, 0 = disable)
 
@@ -289,7 +288,7 @@ All user-facing strings are in `src/Client/Config/Strings.cs`. Messages using fo
 Edit `settings.ini` in `src/Server/` directory and restart the server. All settings take effect on restart. The server automatically creates `files/` directory on first run.
 
 ### Testing Server Changes
-Place test files in the `files/` directory. They appear in the file list about `ChangeDelay` + `FileSettleTime` seconds after they stop changing.
+Place test files in the `files/` directory. They appear in the file list about `FileSettleTime` seconds after they stop changing.
 
 ## Deployment Notes
 

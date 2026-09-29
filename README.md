@@ -56,7 +56,6 @@ The server is fully configurable via `settings.ini`:
 - **Port**: Server port (default: 8080)
 - **FilesDirectory**: Where to serve files from (default: ./files/)
 - **WatchFilesDirectory**: Rebuild the file list shortly after files change (default: true)
-- **ChangeDelay**: Seconds of quiet after a change before the file list is rebuilt (default: 2)
 - **FileSettleTime**: Seconds a file must go unmodified before it is published, so half-copied files are never listed (default: 5)
 - **CacheRegenerationInterval**: Full rebuild interval in seconds, as a fallback to watching (default: 3600 = 1 hour)
 - **MaxConcurrentDownloads**: Limit concurrent downloads (default: 50)
