@@ -6,7 +6,7 @@
         Width="900" Height="675" CanResize="False"
         SystemDecorations="None" WindowStartupLocation="CenterScreen"
         xmlns:vm="using:FileUpdaterClient.ViewModels"
-        xmlns:config="using:FileUpdaterClient.Config" Background="#141110"
+        xmlns:config="using:FileUpdaterClient.Config" xmlns:views="using:FileUpdaterClient.Views" Background="#141110" Icon="/Assets/icon.ico"
         x:Class="FileUpdaterClient.Views.MainWindow" x:DataType="vm:MainViewModel"
         PointerPressed="Window_PointerPressed">
 
@@ -48,7 +48,8 @@
             <Setter Property="RenderTransform" Value="scaleX(1)" />
         </Style>
 
-        <!-- Play button: framed hexagon that glows and grows slightly on hover -->
+        <!-- Play button: Assets/play-button.png (270x96) that glows and grows slightly on hover.
+             The glow is the image's shape filled with orange and blurred, so it follows any art -->
         <Style Selector="Button.play">
             <Setter Property="Foreground" Value="#F2E6CC" />
             <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
@@ -65,29 +66,20 @@
             <Setter Property="Template">
                 <ControlTemplate>
                     <Grid Width="270" Height="96">
-                        <Path Name="Glow" Stretch="Fill" Margin="-6" Opacity="0"
-                              Data="M 30,0 L 240,0 L 270,48 L 240,96 L 30,96 L 0,48 Z" Fill="#FF7A1F">
-                            <Path.Effect>
+                        <Border Name="Glow" Margin="-6" Opacity="0" Background="#FF7A1F">
+                            <Border.OpacityMask>
+                                <ImageBrush Source="{x:Static views:LauncherArt.PlayButton}" Stretch="Fill" />
+                            </Border.OpacityMask>
+                            <Border.Effect>
                                 <BlurEffect Radius="18" />
-                            </Path.Effect>
-                            <Path.Transitions>
+                            </Border.Effect>
+                            <Border.Transitions>
                                 <Transitions>
                                     <DoubleTransition Property="Opacity" Duration="0:0:0.25" />
                                 </Transitions>
-                            </Path.Transitions>
-                        </Path>
-                        <Path Stretch="Fill" StrokeThickness="6" Stroke="{StaticResource GoldBrush}"
-                              Data="M 30,0 L 240,0 L 270,48 L 240,96 L 30,96 L 0,48 Z">
-                            <Path.Fill>
-                                <RadialGradientBrush>
-                                    <GradientStop Offset="0" Color="#7A2418" />
-                                    <GradientStop Offset="0.7" Color="#3A120D" />
-                                    <GradientStop Offset="1" Color="#1C0907" />
-                                </RadialGradientBrush>
-                            </Path.Fill>
-                        </Path>
-                        <Path Stretch="Fill" Margin="11" StrokeThickness="1.5" Stroke="#8C6630"
-                              Data="M 30,0 L 240,0 L 270,48 L 240,96 L 30,96 L 0,48 Z" />
+                            </Border.Transitions>
+                        </Border>
+                        <Image Source="{x:Static views:LauncherArt.PlayButton}" Stretch="Fill" />
                         <!-- Shrinks longer labels (e.g. the download text) to fit inside the frame -->
                         <Viewbox StretchDirection="DownOnly" Margin="34,0" HorizontalAlignment="Center" VerticalAlignment="Center">
                             <ContentPresenter Name="Label" Content="{TemplateBinding Content}"
@@ -104,7 +96,7 @@
         <Style Selector="Button.play:pointerover">
             <Setter Property="RenderTransform" Value="scale(1.05)" />
         </Style>
-        <Style Selector="Button.play:pointerover /template/ Path#Glow">
+        <Style Selector="Button.play:pointerover /template/ Border#Glow">
             <Setter Property="Opacity" Value="0.75" />
         </Style>
         <Style Selector="Button.play:pressed">
@@ -114,6 +106,8 @@
             <Setter Property="Opacity" Value="0.55" />
         </Style>
 
+        <!-- Progress bars: the fill image is stretched to the full bar width and revealed from the left as progress grows.
+             Assets/progress-total.png (all files) and Assets/progress-file.png (current file), 508x22 -->
         <Style Selector="ProgressBar.bar">
             <Setter Property="Height" Value="22" />
             <Setter Property="MinHeight" Value="22" />
@@ -121,6 +115,22 @@
             <Setter Property="Minimum" Value="0" />
             <Setter Property="Maximum" Value="100" />
             <Setter Property="Background" Value="{x:Static config:LauncherConfig.ProgressBarBackground}" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" ClipToBounds="True">
+                        <Border Name="PART_Indicator" HorizontalAlignment="Left" ClipToBounds="True">
+                            <Image Name="Fill" Stretch="Fill" HorizontalAlignment="Left"
+                                   Width="{Binding Bounds.Width, RelativeSource={RelativeSource TemplatedParent}}" />
+                        </Border>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="ProgressBar.total /template/ Image#Fill">
+            <Setter Property="Source" Value="{x:Static views:LauncherArt.ProgressTotal}" />
+        </Style>
+        <Style Selector="ProgressBar.file /template/ Image#Fill">
+            <Setter Property="Source" Value="{x:Static views:LauncherArt.ProgressFile}" />
         </Style>
         <Style Selector="TextBlock.barText">
             <Setter Property="FontSize" Value="12" />
@@ -137,7 +147,7 @@
 
     <Grid>
         <!-- Art -->
-        <Image Source="/Assets/background.png" Stretch="UniformToFill" />
+        <Image Source="{x:Static views:LauncherArt.Background}" Stretch="UniformToFill" />
 
         <!-- Darken the edges and the top/bottom bands so text and controls stay readable over any art -->
         <Border IsHitTestVisible="False">
@@ -226,7 +236,7 @@
                 </Border>
             </StackPanel>
 
-            <!-- Progress: blue = all files, red = current file -->
+            <!-- Progress: top bar = all files, bottom bar = current file -->
             <Grid Grid.Row="2" Height="170">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,34" Spacing="6">
                     <Grid ColumnDefinitions="*,Auto,Auto" Width="520">
@@ -245,29 +255,23 @@
                         </Button>
                     </Grid>
 
-                    <Grid ColumnDefinitions="Auto,*,Auto" Width="560">
-                        <Path Grid.Column="0" Data="M 22,0 L 0,30 L 22,60 L 16,30 Z" Fill="{StaticResource GoldBrush}"
-                              VerticalAlignment="Center" Margin="0,0,-2,0" />
-                        <Border Grid.Column="1" Padding="4" CornerRadius="16" BorderThickness="3"
-                                BorderBrush="{StaticResource GoldBrush}" Background="#E0120E0B"
-                                BoxShadow="0 0 12 2 #A0000000">
-                            <StackPanel Spacing="4">
-                                <Grid>
-                                    <ProgressBar Classes="bar" Value="{Binding Progress}"
-                                                 Foreground="{x:Static config:LauncherConfig.TotalProgressColor}" />
-                                    <Border CornerRadius="11" Background="{StaticResource BarGlossBrush}" IsHitTestVisible="False" />
-                                    <TextBlock Classes="barText" Text="{Binding ProgressText}" />
-                                </Grid>
-                                <Grid>
-                                    <ProgressBar Classes="bar" Value="{Binding FileProgress}"
-                                                 Foreground="{x:Static config:LauncherConfig.FileProgressColor}" />
-                                    <Border CornerRadius="11" Background="{StaticResource BarGlossBrush}" IsHitTestVisible="False" />
-                                    <TextBlock Classes="barText" Text="{Binding FileProgressText}" />
-                                </Grid>
-                            </StackPanel>
-                        </Border>
-                        <Path Grid.Column="2" Data="M 0,0 L 22,30 L 0,60 L 6,30 Z" Fill="{StaticResource GoldBrush}"
-                              VerticalAlignment="Center" Margin="-2,0,0,0" />
+                    <!-- Assets/progress-frame.png (560x60); the bars sit 26 in from the sides and 6 from the top and bottom -->
+                    <Grid Width="560" Height="60">
+                        <Image Source="{x:Static views:LauncherArt.ProgressFrame}" Stretch="Fill">
+                            <Image.Effect>
+                                <DropShadowEffect Color="Black" BlurRadius="18" OffsetX="0" OffsetY="0" Opacity="0.5" />
+                            </Image.Effect>
+                        </Image>
+                        <StackPanel Margin="26,6" Spacing="4">
+                            <Grid>
+                                <ProgressBar Classes="bar total" Value="{Binding Progress}" />
+                                <TextBlock Classes="barText" Text="{Binding ProgressText}" />
+                            </Grid>
+                            <Grid>
+                                <ProgressBar Classes="bar file" Value="{Binding FileProgress}" />
+                                <TextBlock Classes="barText" Text="{Binding FileProgressText}" />
+                            </Grid>
+                        </StackPanel>
                     </Grid>
                 </StackPanel>
             </Grid>

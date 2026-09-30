@@ -80,7 +80,7 @@ public class MainViewModel : INotifyPropertyChanged
 
     public string RetryText => Strings.RetryText;
 
-    /// <summary>Overall progress across all files (blue bar), 0-100.</summary>
+    /// <summary>Overall progress across all files (top bar), 0-100.</summary>
     public double Progress
     {
         get => _progress;
@@ -93,7 +93,7 @@ public class MainViewModel : INotifyPropertyChanged
         private set => SetField(ref _progressText, value);
     }
 
-    /// <summary>Progress of the file currently being downloaded (red bar), 0-100.</summary>
+    /// <summary>Progress of the file currently being downloaded (bottom bar), 0-100.</summary>
     public double FileProgress
     {
         get => _fileProgress;

@@ -28,7 +28,7 @@ public static class Strings
     public const string LauncherUpdateBusyConfirm = "Cancel and update";
     public const string DownloadingFiles = "Downloading files from the server.. ({0}/{1}) - ({2})"; //{0} = current file, {1} = total files, {2} dl speed
     public const string DownloadingBytes = "Downloading.. {0} of {1} - {2}, {3} left"; //{0} = downloaded, {1} = total size, {2} = speed, {3} = time left. Used when the server sends file sizes
-    public const string CurrentFile = "{0}"; //{0} = file name, shown on the red bar
+    public const string CurrentFile = "{0}"; //{0} = file name, shown on the bottom (current file) bar
     public const string Cancelled = "Update cancelled.";
     public const string NotVerified = "Files not verified. Click Verify to check for updates."; //Shown when verifying on launch is turned off
 

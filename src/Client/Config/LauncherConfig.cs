@@ -14,8 +14,6 @@ public static class LauncherConfig
 
     public static SolidColorBrush DefaultTextColor = SolidColorBrush.Parse("#F2F2F2");
     public static SolidColorBrush ProgressBarBackground = SolidColorBrush.Parse("#1A1512");
-    public static SolidColorBrush TotalProgressColor = SolidColorBrush.Parse("#2F6FD6"); //Blue bar, overall progress across all files
-    public static SolidColorBrush FileProgressColor = SolidColorBrush.Parse("#C4202C"); //Red bar, progress of the file currently downloading
 
     public const string UpdateUrl = "http://127.0.0.1:8080/";
 
