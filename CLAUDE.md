@@ -23,7 +23,7 @@ SimpleFileUpdater/
 │   │   ├── UserSettings/    # Player choices saved per user (InstallLocation, Preferences)
 │   │   ├── TazUO/           # TazUO launcher install and start
 │   │   ├── Updating/        # UI-free update logic (server client, file checks, UpdateService)
-│   │   ├── Assets/          # Visual assets (background.png, icon.ico)
+│   │   ├── Assets/          # Visual assets (background, icon, play button and progress bar images)
 │   │   ├── *.csproj         # Project file
 │   │   └── *.sln            # Solution file
 │   ├── Client.Tests/        # xUnit tests for the update logic (Updating/, plus Fakes/ for the fake server and launcher)
@@ -209,7 +209,6 @@ Branding/configuration is in `src/Client/Config/LauncherConfig.cs`, TazUO launch
 - Exe name: `<AssemblyName>` in `src/Client/FileUpdaterClient.csproj`
 - `TitleColor`, `SubtitleColor`: Hex color strings for text
 - `DefaultTextColor`, `ProgressBarBackground`: Brush colors
-- `TotalProgressColor` (blue bar, progress across all files), `FileProgressColor` (red bar, current file download)
 - `Links`: Top navigation links (`NavLink(label, url)`); `NavLink.VerifyAction` as the target re-runs the file check
 - `TazUOLauncherConfig.Enabled`: When false, the TazUO launcher is never downloaded, there is no Play Now button, and the play warning option is hidden from Settings
 - `DownloadButton`, `PlayText`: Center button; shows `DownloadButton` while updates are waiting, then `PlayText`, which opens the TazUO launcher once it is installed. If the files weren't fully verified it first asks the player to confirm (`UnverifiedTitle`, `UnverifiedMessage`)
@@ -222,6 +221,11 @@ Branding/configuration is in `src/Client/Config/LauncherConfig.cs`, TazUO launch
 Visual assets:
 - `src/Client/Assets/background.png`: Background image (window is 900x675, borderless)
 - `src/Client/Assets/icon.ico`: Application icon
+- `src/Client/Assets/play-button.png` (270x96): Center Download/Play button; the label is drawn on top and the hover glow follows the image's shape
+- `src/Client/Assets/progress-frame.png` (560x60): Box around both progress bars; the bars sit 26px in from the sides and 6px from the top and bottom
+- `src/Client/Assets/progress-total.png`, `progress-file.png` (508x22): Fill of the top bar (all files) and bottom bar (current file), stretched to the full bar and revealed from the left
+- Images are stretched to those sizes (set in `Views/MainWindow.axaml`); the defaults are drawn at 2x for high-DPI screens
+- `Views/LauncherArt.cs` loads them; a missing image is null and that part is left blank (the csproj only embeds images that exist)
 
 ### Server Configuration
 

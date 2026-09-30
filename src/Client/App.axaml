@@ -11,14 +11,6 @@
             <GradientStop Offset="0.55" Color="#9C6B2A" />
             <GradientStop Offset="1" Color="#E8C379" />
         </LinearGradientBrush>
-
-        <!-- Laid over each progress bar so any configured color gets the same glossy look -->
-        <LinearGradientBrush x:Key="BarGlossBrush" StartPoint="0%,0%" EndPoint="0%,100%">
-            <GradientStop Offset="0" Color="#70FFFFFF" />
-            <GradientStop Offset="0.45" Color="#10FFFFFF" />
-            <GradientStop Offset="0.55" Color="#00000000" />
-            <GradientStop Offset="1" Color="#60000000" />
-        </LinearGradientBrush>
     </Application.Resources>
 
     <Application.Styles>

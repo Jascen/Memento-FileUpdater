@@ -31,7 +31,7 @@ This repo is meant to be forked: you change a few config files for your server a
    - `Enabled`: set to `false` if your players don't use TazUO. The launcher then only keeps files up to date.
    - `Profiles`: one entry per shard the TazUO launcher should list, with your server's IP, port and client version.
 4. **Text**: any on-screen wording in `src/Client/Config/Strings.cs`.
-5. **Art**: replace `src/Client/Assets/background.png` (the window is 900x675; other sizes are scaled to fill it) and `src/Client/Assets/icon.ico`.
+5. **Art**: replace `src/Client/Assets/background.png` (the window is 900x675; other sizes are scaled to fill it) and `src/Client/Assets/icon.ico`. The play button and progress bars are images too: `play-button.png` (270x96), `progress-frame.png` (560x60, the box around both bars), and `progress-total.png` / `progress-file.png` (508x22, the fill of the top and bottom bar). Each is stretched to that size, so keep the aspect ratio; drawing them at twice the size keeps them sharp on high-DPI screens. Delete one to leave that part blank.
 
 ### Building
 **Automatic (recommended):** push a tag like `v1.0.0` to your fork on GitHub. The Release workflow builds the launcher for Windows, Linux, macOS (Intel) and macOS (Apple Silicon), plus the server for Windows and Linux, and attaches the zips to a GitHub release. You can also run the Release workflow by hand from the Actions tab to get the zips without making a release.

@@ -28,7 +28,12 @@
 
   <ItemGroup>
     <None Remove="Assets\background.png" />
-    <AvaloniaResource Include="Assets\background.png" />
+    <!-- Replaceable art, loaded by Views/LauncherArt.cs. Keep each image's aspect ratio (see MainWindow.axaml); a missing one is left blank -->
+    <AvaloniaResource Include="Assets\background.png" Condition="Exists('Assets\background.png')" />
+    <AvaloniaResource Include="Assets\play-button.png" Condition="Exists('Assets\play-button.png')" />
+    <AvaloniaResource Include="Assets\progress-frame.png" Condition="Exists('Assets\progress-frame.png')" />
+    <AvaloniaResource Include="Assets\progress-total.png" Condition="Exists('Assets\progress-total.png')" />
+    <AvaloniaResource Include="Assets\progress-file.png" Condition="Exists('Assets\progress-file.png')" />
   </ItemGroup>
 
 </Project>
