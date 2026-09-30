@@ -398,3 +398,7 @@ FodyWeavers.xsd
 *.sln.iml
 /src/Server/files
 /src/Client/.idea
+
+# Package signing keys: the private key must never be committed
+package-signing.key
+*.key

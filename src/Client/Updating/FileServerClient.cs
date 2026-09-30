@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
+using FileUpdaterPackages;
 
 namespace FileUpdaterClient.Updating;
 
@@ -89,19 +91,35 @@ public class FileServerClient
     //Downloads to a temporary .part file first so a failed or cancelled download never leaves a partial file in place.
     //A .part left by an earlier attempt is resumed with a Range request instead of starting over.
     //onBytes is called after each chunk with (chunk size, bytes of this file so far, file length if the server sent it)
-    public async Task DownloadFileAsync(FileEntry file, string filePath, Action<int, long, long?> onBytes,
+    public Task DownloadFileAsync(FileEntry file, string filePath, Action<int, long, long?> onBytes,
+        CancellationToken cancellationToken) =>
+        DownloadAsync(FileUrl(file.Name), file.Name, file.Size, file.Md5, _localFiles.ComputeMd5, filePath, onBytes, cancellationToken);
+
+    //Same for a launcher or client package, checked against the SHA-256 in the signed manifest
+    public Task DownloadPackageAsync(PackageEntry package, string filePath, Action<int, long, long?> onBytes,
         CancellationToken cancellationToken)
+    {
+        //The name comes from a signed manifest, but it is still only ever a plain file name
+        if (!PackageFileName.IsPlain(package.File))
+            throw new InvalidDataException($"[{package.File}] is not a plain file name");
+
+        return DownloadAsync(PackageUrl("file/" + Uri.EscapeDataString(package.File)), package.File, package.Size,
+            package.Sha256, _localFiles.ComputeSha256, filePath, onBytes, cancellationToken);
+    }
+
+    private async Task DownloadAsync(Uri url, string name, long? expectedSize, string expectedHash, Func<string, string> computeHash,
+        string filePath, Action<int, long, long?> onBytes, CancellationToken cancellationToken)
     {
         var tempPath = filePath + ".part";
         long resumeFrom = _localFiles.Exists(tempPath) ? _localFiles.Length(tempPath) : 0;
-        if (resumeFrom > 0 && resumeFrom == file.Size)
+        if (resumeFrom > 0 && resumeFrom == expectedSize)
         {
             //Fully downloaded earlier but never moved into place, e.g. the file was locked
-            VerifyAndMove(file, tempPath, filePath);
+            VerifyAndMove(name, expectedHash, computeHash, tempPath, filePath);
             return;
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, FileUrl(file.Name));
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
         if (resumeFrom > 0)
             request.Headers.Range = new RangeHeaderValue(resumeFrom, null);
 
@@ -110,7 +128,7 @@ public class FileServerClient
         {
             //The .part is already as long as the file (or longer), so it can't be resumed. Start over on the next attempt
             _localFiles.DeleteIfExists(tempPath);
-            throw new InvalidDataException($"[{file.Name}] partial download can't be resumed");
+            throw new InvalidDataException($"[{name}] partial download can't be resumed");
         }
 
         response.EnsureSuccessStatusCode();
@@ -134,22 +152,64 @@ public class FileServerClient
             }
         }
 
-        VerifyAndMove(file, tempPath, filePath);
+        VerifyAndMove(name, expectedHash, computeHash, tempPath, filePath);
     }
 
     //Rejects truncated or changed downloads so they are retried from scratch instead of replacing the local file
-    private void VerifyAndMove(FileEntry file, string tempPath, string filePath)
+    private void VerifyAndMove(string name, string expectedHash, Func<string, string> computeHash, string tempPath, string filePath)
     {
-        var downloadedMd5 = _localFiles.ComputeMd5(tempPath);
-        if (!file.Md5.Equals(downloadedMd5, StringComparison.OrdinalIgnoreCase))
+        var downloadedHash = computeHash(tempPath);
+        if (!expectedHash.Equals(downloadedHash, StringComparison.OrdinalIgnoreCase))
         {
             _localFiles.DeleteIfExists(tempPath);
             throw new InvalidDataException(
-                $"[{file.Name}] hash mismatch after download (expected {file.Md5}, got {downloadedMd5})");
+                $"[{name}] hash mismatch after download (expected {expectedHash}, got {downloadedHash})");
         }
 
         _localFiles.Move(tempPath, filePath);
     }
+
+    //Fetches the package manifest and returns it only if one of trustedKeys signed exactly those bytes.
+    //Null when the server hosts no packages. Anything else wrong throws UpdateServerException, so nothing unsigned is ever acted on
+    public async Task<PackageManifest?> GetPackageManifestAsync(IReadOnlyCollection<string> trustedKeys, CancellationToken cancellationToken)
+    {
+        var manifest = await GetBytesAsync(PackageManifest.ManifestFileName, cancellationToken);
+        if (manifest == null) return null;
+
+        var signature = await GetBytesAsync(PackageManifest.SignatureFileName, cancellationToken);
+        if (signature == null || !ManifestSigning.Verify(manifest, Encoding.UTF8.GetString(signature), trustedKeys))
+            throw new UpdateServerException(UpdateError.PackagesUntrusted, "The package manifest is not signed by a trusted key.");
+
+        try
+        {
+            return PackageManifest.Parse(manifest);
+        }
+        catch (Exception e) when (e is JsonException or InvalidDataException)
+        {
+            throw new UpdateServerException(UpdateError.BadData, e.Message, e);
+        }
+    }
+
+    //Null on 404
+    private async Task<byte[]?> GetBytesAsync(string packageFile, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await _listClient.GetAsync(PackageUrl(packageFile), cancellationToken);
+            if (response.StatusCode == HttpStatusCode.NotFound) return null;
+            if (!response.IsSuccessStatusCode)
+                throw new UpdateServerException(UpdateError.ConnectionFailed,
+                    $"Server returned {(int)response.StatusCode} for {packageFile}.");
+
+            return await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            throw new UpdateServerException(UpdateError.ConnectionFailed, e.Message, e);
+        }
+    }
+
+    private Uri PackageUrl(string path) => new(_baseUrl.TrimEnd('/') + "/packages/" + path);
 
     //Escapes each part of the name so files with spaces, # or ? in their names download correctly
     private Uri FileUrl(string name) =>

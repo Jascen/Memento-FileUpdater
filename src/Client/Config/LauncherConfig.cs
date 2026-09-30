@@ -17,6 +17,14 @@ public static class LauncherConfig
 
     public const string UpdateUrl = "http://127.0.0.1:8080/";
 
+    //Public keys (base64, printed by `PackageSigner keygen`) whose signature the server's launcher and client packages must carry.
+    //Several can be listed so a key can be replaced without stranding old installs. While this is empty the launcher only
+    //updates game files: it installs and runs nothing it downloaded, so the TazUO launcher can't be installed either
+    public static readonly string[] TrustedPublicKeys = [];
+
+    //How often an open launcher looks for a newer version of itself. The check at launch always happens
+    public static readonly TimeSpan PackageCheckInterval = TimeSpan.FromHours(4);
+
     //Links shown along the top of the launcher, in order. Use NavLink.VerifyAction as the target to re-check all files instead of opening a url.
     public static readonly NavLink[] Links =
     [

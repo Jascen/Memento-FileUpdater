@@ -78,6 +78,21 @@ The server is fully configurable via `settings.ini`:
 - **EnableCompression**: Enable gzip/brotli compression (default: true)
 - And more... see settings.ini for full configuration options 
 
+## Hosting the launcher and client packages
+The server can also host the launcher and client (TazUO) packages for players to download. These are programs players run, so they are signed:
+1. Generate a signing key once, on your own machine: `dotnet run --project src/PackageSigner -- keygen`. Keep `package-signing.key` private (it is git-ignored) and never put it on the server. The launcher will be built with the printed public key.
+2. Name your zips `{role}-{version}.{rid}.zip`, e.g. `launcher-1.2.0.win-x64.zip` and `client-3.4.0.win-x64.zip`, and put them in one folder.
+3. Sign: `dotnet run --project src/PackageSigner -- sign --packages <folder> --key package-signing.key`. This writes `manifest.json` and `manifest.sig` next to the zips.
+4. Upload the folder's contents to the server's `packages/` folder (`PackagesDirectory` in `settings.ini`). Players' launchers fetch `/packages/manifest.json` and only trust it if the signature matches.
+
+The launcher uses these packages in two ways. The **client** (the TazUO launcher, unzipped into `TazUOLauncherConfig.InstallFolder`) is installed and updated with the game files. A newer **launcher** is only offered: a small notice appears next to the play button (at launch, and every `LauncherConfig.PackageCheckInterval` while it stays open) with an **Update launcher** button and a "Not now" dismiss. Players are never forced to update it, and Verify, Download and Play keep working while the notice is showing. The TazUO launcher is no longer downloaded from GitHub; it comes only from your server's `client-{version}.{rid}.zip`.
+
+In your fork, set `LauncherConfig.TrustedPublicKeys` to the public key `keygen` printed. **While it is empty the launcher installs nothing it downloaded**, so it only updates game files and can't install the TazUO launcher. Only platforms you publish packages for are supported: a player on another platform gets no client install.
+
+When the player clicks **Update launcher**, the launcher downloads the package (SHA-256 checked against the signed manifest) and starts a temporary copy of itself with `--apply-update`, then closes. The copy waits for the launcher to exit, unpacks the zip to a temporary folder first (so a bad zip or a full disk leaves the install alone), copies the files over with the exe last, and starts the new launcher. If anything goes wrong the old launcher is started again. It needs the launcher's folder to be writable and to be running as its own exe (not through `dotnet run`); otherwise the update is skipped for that run. A launcher package is the zip `release.yml` builds: the exe plus the native libraries beside it.
+
+If you already had players on a launcher that installed TazUO from GitHub, the first update replaces their TazUO launcher files once with your hosted `client` package (their profiles are kept), since no installed version was recorded.
+
 # Client Info
 - Players can put the launcher anywhere. Game files are downloaded into a `Client` folder next to it by default, and players can pick another folder in Settings (the cog button).
 - For example:

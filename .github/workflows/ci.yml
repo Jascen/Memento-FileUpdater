@@ -20,3 +20,12 @@ jobs:
 
       - name: Test client
         run: dotnet test src/Client.Tests -c Release
+
+      - name: Test server
+        run: dotnet test src/Server.Tests -c Release
+
+      - name: Test packages
+        run: dotnet test src/PackageManifest.Tests -c Release
+
+      - name: Build package signer
+        run: dotnet build src/PackageSigner -c Release

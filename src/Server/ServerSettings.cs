@@ -9,6 +9,7 @@ public class ServerSettings
 
     // Files section
     public string FilesDirectory { get; set; } = "./files/";
+    public string PackagesDirectory { get; set; } = "./packages/"; // launcher and client packages, plus their signed manifest
     public string CacheFileName { get; set; } = "jsoncache.json";
     public int CacheRegenerationInterval { get; set; } = 3600;
     public bool WatchFilesDirectory { get; set; } = true;

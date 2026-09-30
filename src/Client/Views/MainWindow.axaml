@@ -219,6 +219,21 @@
                 <Button Classes="play" Content="{Binding MainButtonText}" IsEnabled="{Binding MainButtonEnabled}"
                         IsVisible="{Binding MainButtonVisible}"
                         HorizontalAlignment="Center" Margin="0,28,0,0" Click="MainButton_Click" />
+
+                <!-- A newer launcher is optional: everything else keeps working while this is showing -->
+                <Border IsVisible="{Binding LauncherUpdateAvailable}" HorizontalAlignment="Center" Margin="0,18,0,0"
+                        Padding="14,6" CornerRadius="14" BorderThickness="1" BorderBrush="{StaticResource GoldBrush}" Background="#E0120E0B">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="{Binding LauncherUpdateText}" FontSize="13" VerticalAlignment="Center"
+                                   Foreground="{x:Static config:LauncherConfig.DefaultTextColor}" />
+                        <Button Classes="dialog secondary" Content="{Binding UpdateLauncherText}" Click="UpdateLauncher_Click"
+                                MinWidth="0" Padding="12,2" FontSize="12" />
+                        <Button Classes="chrome close" Width="22" Height="22" Click="DismissLauncherUpdate_Click"
+                                ToolTip.Tip="{Binding DismissLauncherUpdateText}">
+                            <Path Data="M 0,0 L 8,8 M 8,0 L 0,8" Stroke="#E8D6B0" StrokeThickness="1.5" />
+                        </Button>
+                    </StackPanel>
+                </Border>
             </StackPanel>
 
             <!-- Progress: top bar = all files, bottom bar = current file -->

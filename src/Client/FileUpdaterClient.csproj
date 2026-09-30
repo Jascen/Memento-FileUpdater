@@ -16,6 +16,7 @@
     <RuntimeIdentifiers>win-x64;linux-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
     <SelfContained>true</SelfContained>
     <LangVersion>default</LangVersion>
+    <DebugType>none</DebugType> <!-- The launcher package is a few files, a .pdb isn't worth shipping -->
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,6 +25,10 @@
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.2" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.2" />
     <PackageReference Include="TestableIO.System.IO.Abstractions.Wrappers" Version="22.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../PackageManifest/PackageManifest.csproj" />
   </ItemGroup>
 
   <ItemGroup>
