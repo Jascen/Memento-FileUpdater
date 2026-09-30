@@ -15,10 +15,10 @@ public class UpdateServiceTests
 
     public UpdateServiceTests() => _fileSystem.Directory.CreateDirectory(InstallPath);
 
-    private UpdateService CreateService(ILauncherInstaller? launcher = null, string[]? keepLocalFiles = null)
+    private UpdateService CreateService(IPackageUpdater? packages = null, string[]? keepLocalFiles = null)
     {
         var localFiles = new LocalFiles(_fileSystem);
-        return new UpdateService(new FileServerClient(Url, localFiles, _server), localFiles, InstallPath, launcher, keepLocalFiles)
+        return new UpdateService(new FileServerClient(Url, localFiles, _server), localFiles, InstallPath, packages, keepLocalFiles)
         {
             RetryDelay = _ => TimeSpan.Zero,
         };
@@ -155,30 +155,46 @@ public class UpdateServiceTests
     }
 
     [Fact]
-    public async Task CheckReportsMissingLauncher()
+    public async Task CheckReportsPackagesThatNeedUpdating()
     {
         //Arrange
         _server.Add("a.mul", "same");
         WriteLocal("a.mul", "same");
-        var launcher = new FakeLauncher();
-        var service = CreateService(launcher);
+        var packages = new FakePackageUpdater { Updates = FakePackageUpdater.ClientPending };
+        var service = CreateService(packages);
 
         //Act
         var result = await service.CheckAsync();
 
         //Assert
-        Assert.Equal(UpdateResult.LauncherReady, result);
-        Assert.False(launcher.IsInstalled);
+        Assert.Equal(UpdateResult.PackagesReady, result);
+        Assert.Equal(0, packages.ApplyCount);
     }
 
     [Fact]
-    public async Task DownloadInstallsMissingLauncher()
+    public async Task FilesTakePrecedenceOverPackagesInTheCheckResult()
     {
         //Arrange
-        _server.Add("a.mul", "same");
-        WriteLocal("a.mul", "same");
-        var launcher = new FakeLauncher();
-        var service = CreateService(launcher);
+        _server.Add("a.mul", "new");
+        WriteLocal("a.mul", "old");
+        var service = CreateService(new FakePackageUpdater { Updates = FakePackageUpdater.ClientPending });
+
+        //Act
+        var result = await service.CheckAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.UpdatesReady, result);
+    }
+
+    [Fact]
+    public async Task DownloadAppliesPackagesBeforeDownloadingFiles()
+    {
+        //Arrange
+        _server.Add("a.mul", "new");
+        var order = new List<string>();
+        var packages = new FakePackageUpdater { Updates = FakePackageUpdater.ClientPending, OnApply = () => order.Add("packages") };
+        var service = CreateService(packages);
+        service.FileProgressChanged += file => { if (!order.Contains("files")) order.Add("files"); };
         await service.CheckAsync();
 
         //Act
@@ -186,7 +202,80 @@ public class UpdateServiceTests
 
         //Assert
         Assert.Equal(UpdateResult.Finished, result);
-        Assert.True(launcher.IsInstalled);
+        Assert.Equal(["packages", "files"], order);
+        Assert.Equal(1, packages.ApplyCount); //Finish doesn't apply them a second time
+        Assert.Equal("new", ReadLocal("a.mul"));
+    }
+
+    [Fact]
+    public async Task FinishAppliesPackagesWhenNothingWasPending()
+    {
+        //Arrange
+        _server.Add("a.mul", "same");
+        WriteLocal("a.mul", "same");
+        var packages = new FakePackageUpdater(); //Nothing out of date, but profiles still get set up
+        var service = CreateService(packages);
+
+        //Act
+        var result = await service.CheckAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result);
+        Assert.Equal(1, packages.ApplyCount);
+    }
+
+    [Fact]
+    public async Task DownloadStopsWhenTheLauncherReplacesItself()
+    {
+        //Arrange
+        _server.Add("a.mul", "new");
+        var packages = new FakePackageUpdater { Updates = FakePackageUpdater.LauncherPending, Restart = true };
+        var service = CreateService(packages);
+        await service.CheckAsync();
+
+        //Act
+        var result = await service.DownloadAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Restarting, result);
+        Assert.Empty(_server.Downloads); //The new launcher does the file update
+    }
+
+    [Fact]
+    public async Task UntrustedPackagesFailTheCheck()
+    {
+        //Arrange
+        _server.Add("a.mul", "same");
+        WriteLocal("a.mul", "same");
+        var service = CreateService(new FakePackageUpdater { CheckError = new UpdateServerException(UpdateError.PackagesUntrusted, "bad signature") });
+        var errors = new List<UpdateErrorInfo>();
+        service.ErrorOccurred += errors.Add;
+
+        //Act
+        var result = await service.CheckAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Failed, result);
+        Assert.Equal([new UpdateErrorInfo(UpdateError.PackagesUntrusted)], errors);
+    }
+
+    [Fact]
+    public async Task PackageErrorsAreReported()
+    {
+        //Arrange
+        _server.Add("a.mul", "same");
+        WriteLocal("a.mul", "same");
+        var packages = new FakePackageUpdater { ApplyError = UpdateError.LauncherFailed };
+        var service = CreateService(packages);
+        var errors = new List<UpdateErrorInfo>();
+        service.ErrorOccurred += errors.Add;
+
+        //Act
+        var result = await service.CheckAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result); //Game files are fine, the launcher install is retried next time
+        Assert.Equal([new UpdateErrorInfo(UpdateError.LauncherFailed)], errors);
     }
 
     [Fact]

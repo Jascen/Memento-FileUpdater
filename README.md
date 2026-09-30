@@ -85,6 +85,14 @@ The server can also host the launcher and client (TazUO) packages for players to
 3. Sign: `dotnet run --project src/PackageSigner -- sign --packages <folder> --key package-signing.key`. This writes `manifest.json` and `manifest.sig` next to the zips.
 4. Upload the folder's contents to the server's `packages/` folder (`PackagesDirectory` in `settings.ini`). Players' launchers fetch `/packages/manifest.json` and only trust it if the signature matches.
 
+The launcher installs and updates from these packages in this order: a newer **launcher** (handed to `ISelfUpdater`, see below), then the **client** (the TazUO launcher, unzipped into `TazUOLauncherConfig.InstallFolder`), then the game files. The TazUO launcher is no longer downloaded from GitHub; it comes only from your server's `client-{version}.{rid}.zip`.
+
+In your fork, set `LauncherConfig.TrustedPublicKeys` to the public key `keygen` printed. **While it is empty the launcher installs nothing it downloaded**, so it only updates game files and can't install the TazUO launcher. Only platforms you publish packages for are supported: a player on another platform gets no client install.
+
+Replacing the running launcher is done by `ISelfUpdater`. `NotImplementedSelfUpdater` is a stub that declines, so the launcher just carries on with its current version until you plug in a real one (`MainViewModel.StartWithFolderAsync`).
+
+If you already had players on a launcher that installed TazUO from GitHub, the first update replaces their TazUO launcher files once with your hosted `client` package (their profiles are kept), since no installed version was recorded.
+
 # Client Info
 - Players can put the launcher anywhere. Game files are downloaded into a `Client` folder next to it by default, and players can pick another folder in Settings (the cog button).
 - For example:

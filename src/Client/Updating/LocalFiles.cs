@@ -24,6 +24,12 @@ public class LocalFiles(IFileSystem fileSystem)
         return Convert.ToHexString(md5.ComputeHash(stream)).ToLowerInvariant();
     }
 
+    public string ComputeSha256(string fileName)
+    {
+        using var stream = fileSystem.File.OpenRead(fileName);
+        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+    }
+
     public void EnsureDirectory(string filePath)
     {
         string? dirPath = Path.GetDirectoryName(filePath);
