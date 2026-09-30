@@ -30,6 +30,10 @@ public class MainViewModel : INotifyPropertyChanged
     private bool _launcherInstalled;
     public event PropertyChangedEventHandler? PropertyChanged;
 
+    //Where launcher and client packages are saved while they download
+    private static readonly string PackageDownloadFolder = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), LauncherConfig.AppDataFolder, "downloads");
+
     public IReadOnlyList<NavLink> Links { get; } = LauncherConfig.Links;
     public string Title => LauncherConfig.Title;
     public string TitleColor => LauncherConfig.TitleColor;
@@ -157,8 +161,12 @@ public class MainViewModel : INotifyPropertyChanged
         var installPath = InstallLocation.Path;
         _launcher = TazUOLauncherConfig.Enabled ? new TazUOLauncher(installPath) : null;
         var localFiles = new LocalFiles(new FileSystem());
-        var updates = new UpdateService(new FileServerClient(LauncherConfig.UpdateUrl, localFiles), localFiles, installPath, _launcher,
-            LauncherConfig.KeepLocalFiles);
+        var server = new FileServerClient(LauncherConfig.UpdateUrl, localFiles);
+        //Without a trusted signing key nothing the server hosts as a package is ever installed
+        var packages = LauncherConfig.TrustedPublicKeys.Length == 0 ? null
+            : new PackageUpdater(server, localFiles, LauncherConfig.TrustedPublicKeys, PlatformId.Current, LauncherVersion.Current,
+                PackageDownloadFolder, new NotImplementedSelfUpdater(), _launcher, new PackageState());
+        var updates = new UpdateService(server, localFiles, installPath, packages, LauncherConfig.KeepLocalFiles);
         //A service that has been replaced (the folder changed) may still be winding down, so its updates are ignored
         updates.ProgressChanged += progress => Dispatcher.UIThread.Post(() => { if (updates == _updates) ShowProgress(progress); });
         updates.FileProgressChanged += file => Dispatcher.UIThread.Post(() => { if (updates == _updates) ShowFileProgress(file); });
@@ -175,6 +183,8 @@ public class MainViewModel : INotifyPropertyChanged
         Progress = 0;
         FileProgress = 0;
         FileProgressText = string.Empty;
+        if (packages == null && TazUOLauncherConfig.Enabled)
+            ErrorMessage = Strings.PackagesNotConfigured;
 
         if (Preferences.Current.VerifyOnLaunch)
             await CheckForUpdatesAsync();
@@ -206,7 +216,7 @@ public class MainViewModel : INotifyPropertyChanged
     public async Task RetryAsync()
     {
         var result = await CheckForUpdatesAsync();
-        if (result is UpdateResult.UpdatesReady or UpdateResult.LauncherReady)
+        if (result is UpdateResult.UpdatesReady or UpdateResult.PackagesReady)
             await DownloadUpdatesAsync();
     }
 
@@ -301,8 +311,17 @@ public class MainViewModel : INotifyPropertyChanged
                         Units.Speed(progress.BytesPerSecond), progress.TimeLeft is { } left ? Units.Duration(left) : "?")
                     : string.Format(Strings.DownloadingFiles, progress.Done, progress.Total, Units.Speed(progress.BytesPerSecond));
                 break;
-            case UpdatePhase.InstallingLauncher:
-                ProgressText = Strings.InstallingTazUO;
+            case UpdatePhase.UpdatingLauncher:
+                Progress = progress.Percent;
+                ProgressText = progress.BytesTotal > 0 && progress.Done == 0
+                    ? string.Format(Strings.DownloadingLauncher, Units.Bytes(progress.BytesDone), Units.Bytes(progress.BytesTotal))
+                    : Strings.UpdatingLauncher;
+                break;
+            case UpdatePhase.InstallingClient:
+                Progress = progress.Percent;
+                ProgressText = progress.BytesTotal > 0 && progress.Done == 0
+                    ? string.Format(Strings.DownloadingTazUO, Units.Bytes(progress.BytesDone), Units.Bytes(progress.BytesTotal))
+                    : Strings.InstallingTazUO;
                 break;
         }
     }
@@ -322,6 +341,8 @@ public class MainViewModel : INotifyPropertyChanged
             UpdateError.FileFailed => string.Format(Strings.FileFailedError, error.FileName),
             UpdateError.FileLocked => string.Format(Strings.FileLockedError, error.FileName),
             UpdateError.LauncherFailed => Strings.TazUOError,
+            UpdateError.SelfUpdateFailed => Strings.SelfUpdateError,
+            UpdateError.PackagesUntrusted => Strings.PackagesUntrustedError,
             _ => Strings.UnknownError,
         };
     }
@@ -331,11 +352,15 @@ public class MainViewModel : INotifyPropertyChanged
         switch (result)
         {
             case UpdateResult.UpdatesReady:
-            case UpdateResult.LauncherReady:
+            case UpdateResult.PackagesReady:
                 Progress = 0;
-                ProgressText = result == UpdateResult.UpdatesReady ? Strings.UpdatesReady : Strings.LauncherReady;
+                ProgressText = result == UpdateResult.UpdatesReady ? Strings.UpdatesReady : Strings.PackagesReady;
                 DownloadsReady = true;
                 break;
+            case UpdateResult.Restarting:
+                //The new launcher takes over, so the window stays busy until this process exits
+                ProgressText = Strings.Restarting;
+                return;
             case UpdateResult.Finished:
                 var failed = _updates?.FailedFiles.Count ?? 0;
                 FilesVerified = _updates?.FilesVerified ?? false;

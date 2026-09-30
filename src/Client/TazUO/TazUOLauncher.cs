@@ -8,9 +8,9 @@ using FileUpdaterClient.Updating;
 
 namespace FileUpdaterClient.TazUO;
 
-//Installs the TazUO launcher next to the game files, gives it ready-made profiles for our shard, and starts it.
-//Installed after the file update. The TazUO launcher keeps itself and the TazUO client up to date from then on.
-public class TazUOLauncher(string installPath) : ILauncherInstaller
+//Installs the TazUO launcher (from the package the server hosts) next to the game files, gives it ready-made profiles
+//for our shard, and starts it. PackageUpdater decides when to install; this class only knows how.
+public class TazUOLauncher(string installPath) : IClientInstaller
 {
     public string LauncherDirectory => Path.Combine(installPath, TazUOLauncherConfig.InstallFolder);
 
@@ -28,52 +28,22 @@ public class TazUOLauncher(string installPath) : ILauncherInstaller
         });
     }
 
-    public async Task EnsureInstalledAsync(CancellationToken cancellationToken)
+    //Unpacks a package zip into the launcher folder, replacing what's there. Players' profiles aren't in the zip, so they are kept
+    public void InstallFromZip(string zipPath)
     {
-        if (!IsInstalled)
-            await DownloadLauncherAsync(cancellationToken);
-
-        foreach (var profile in TazUOLauncherConfig.Profiles)
-            CreateProfileIfMissing(profile);
-    }
-
-    private async Task DownloadLauncherAsync(CancellationToken cancellationToken)
-    {
-        using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(15) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("FileUpdaterClient"); //GitHub rejects requests without one
-
-        //Release assets are named like TazUO-Launcher.win-x64.zip
-        var assetSuffix = $".{GetRuntimeId()}.zip";
-        var release = JsonNode.Parse(await client.GetStringAsync(TazUOLauncherConfig.ReleaseApiUrl, cancellationToken));
-        var downloadUrl = release?["assets"]?.AsArray()
-            .Select(asset => asset?["browser_download_url"]?.GetValue<string>())
-            .FirstOrDefault(url => url != null && url.EndsWith(assetSuffix, StringComparison.OrdinalIgnoreCase));
-
-        if (downloadUrl == null)
-            throw new InvalidOperationException($"No TazUO launcher download found for {assetSuffix}");
-
-        Console.WriteLine($"Downloading TazUO launcher from {downloadUrl}..");
-        var zipPath = Path.Combine(installPath, "TazUO-Launcher.zip.part");
-        try
-        {
-            await using (var zipStream = await client.GetStreamAsync(downloadUrl, cancellationToken))
-            await using (var fileStream = File.Create(zipPath))
-            {
-                await zipStream.CopyToAsync(fileStream, cancellationToken);
-            }
-
-            ZipFile.ExtractToDirectory(zipPath, LauncherDirectory, overwriteFiles: true);
-        }
-        finally
-        {
-            File.Delete(zipPath);
-        }
+        ZipFile.ExtractToDirectory(zipPath, LauncherDirectory, overwriteFiles: true);
 
         if (!OperatingSystem.IsWindows() && File.Exists(LauncherExecutable))
         {
             File.SetUnixFileMode(LauncherExecutable, File.GetUnixFileMode(LauncherExecutable)
                 | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
         }
+    }
+
+    public void EnsureProfiles()
+    {
+        foreach (var profile in TazUOLauncherConfig.Profiles)
+            CreateProfileIfMissing(profile);
     }
 
     //Writes the two files the TazUO launcher reads for a profile: Profiles/<id>.json and Profiles/Settings/<id>.json.
@@ -108,12 +78,5 @@ public class TazUOLauncher(string installPath) : ILauncherInstaller
         };
         File.WriteAllText(profilePath, launcherProfile.ToJsonString(options));
         Console.WriteLine($"Created TazUO profile [{profile.Name}]");
-    }
-
-    private static string GetRuntimeId()
-    {
-        var os = OperatingSystem.IsWindows() ? "win" : OperatingSystem.IsMacOS() ? "osx" : "linux";
-        var arch = RuntimeInformation.OSArchitecture == Architecture.Arm64 ? "arm64" : "x64";
-        return $"{os}-{arch}";
     }
 }

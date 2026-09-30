@@ -16,7 +16,7 @@ public class UpdateService
     private readonly FileServerClient _server;
     private readonly LocalFiles _localFiles;
     private readonly string _installPath;
-    private readonly ILauncherInstaller? _launcher;
+    private readonly IPackageUpdater? _packages;
     private readonly IReadOnlyCollection<string> _keepLocalFiles;
     private readonly HashCache _hashes;
 
@@ -24,6 +24,8 @@ public class UpdateService
     private readonly ConcurrentQueue<FileEntry> _toDownload = new();
     private readonly Stopwatch _downloadClock = new(); //Wall-clock time of the download phase, shared by all workers
     private CancellationTokenSource _cancellation = new();
+    private PackageUpdates _packageUpdates = PackageUpdates.None; //What the last check found out of date in the signed manifest
+    private bool _packagesApplied; //Whether this run already applied the package updates, so Finish doesn't repeat it
     private bool _needsFileList = true; //A cancelled or failed run leaves the queues incomplete, so the next run starts from a fresh file list
     private volatile bool _stopAtFirstDifference;
     private int _compareTotal;
@@ -49,15 +51,15 @@ public class UpdateService
     //Files the last run couldn't download
     public IReadOnlyCollection<string> FailedFiles => _failedFiles.ToArray();
 
-    //launcher is null when the TazUO launcher is turned off.
+    //packages is null when the server hosts no packages for this launcher (no trusted signing key), so only files are updated.
     //keepLocalFiles are name patterns (e.g. "*.cfg") for files players change themselves: downloaded only when missing, never replaced
-    public UpdateService(FileServerClient server, LocalFiles localFiles, string installPath, ILauncherInstaller? launcher,
+    public UpdateService(FileServerClient server, LocalFiles localFiles, string installPath, IPackageUpdater? packages,
         IReadOnlyCollection<string>? keepLocalFiles = null)
     {
         _server = server;
         _localFiles = localFiles;
         _installPath = installPath;
-        _launcher = launcher;
+        _packages = packages;
         _keepLocalFiles = keepLocalFiles ?? [];
         _hashes = new HashCache(localFiles, installPath);
     }
@@ -69,21 +71,26 @@ public class UpdateService
     {
         _needsFileList = true;
         if (!await LoadFileList(token)) return UpdateResult.Failed;
+        if (!await CheckPackages(token)) return UpdateResult.Failed;
 
         //Only need to know whether anything changed, the rest is checked by DownloadAsync
         await CompareFiles(stopAtFirstDifference: true);
         token.ThrowIfCancellationRequested();
 
         if (!_toDownload.IsEmpty) return UpdateResult.UpdatesReady;
-        if (_launcher is { IsInstalled: false }) return UpdateResult.LauncherReady;
+        if (_packageUpdates.Any) return UpdateResult.PackagesReady;
 
         return await Finish(token);
     });
 
-    //Checks the files CheckAsync skipped and downloads everything that differs
+    //Updates this launcher and the TazUO launcher, then checks the files CheckAsync skipped and downloads everything that differs
     public Task<UpdateResult> DownloadAsync() => RunAsync(async token =>
     {
         if (_needsFileList && !await LoadFileList(token)) return UpdateResult.Failed;
+        if (!await CheckPackages(token)) return UpdateResult.Failed;
+
+        if (await ApplyPackages(token)) return UpdateResult.Restarting; //Replaced itself, the new launcher carries on
+        token.ThrowIfCancellationRequested();
 
         await CompareFiles(stopAtFirstDifference: false);
         await DownloadFiles();
@@ -95,6 +102,7 @@ public class UpdateService
         if (_cancellation.IsCancellationRequested) _cancellation = new CancellationTokenSource();
         var token = _cancellation.Token;
         FilesVerified = false;
+        _packagesApplied = false;
         _failedFiles.Clear();
 
         try
@@ -147,26 +155,48 @@ public class UpdateService
 
     private async Task<UpdateResult> Finish(CancellationToken token)
     {
-        await SetUpLauncher(token);
+        if (!_packagesApplied) await ApplyPackages(token); //Nothing was pending, but the TazUO profiles still get set up
         token.ThrowIfCancellationRequested();
 
         FilesVerified = _failedFiles.IsEmpty; //Every file matched the server or was downloaded
         return UpdateResult.Finished;
     }
 
-    private async Task SetUpLauncher(CancellationToken token)
+    //Asks the server's signed manifest which packages are out of date. An untrusted or unreachable manifest stops the run
+    private async Task<bool> CheckPackages(CancellationToken token)
     {
-        if (_launcher == null || token.IsCancellationRequested) return;
+        _packageUpdates = PackageUpdates.None;
+        if (_packages == null) return true;
 
-        ProgressChanged?.Invoke(new UpdateProgress(UpdatePhase.InstallingLauncher, 0, 0));
         try
         {
-            await _launcher.EnsureInstalledAsync(token);
+            _packageUpdates = await _packages.CheckAsync(token);
+            return true;
+        }
+        catch (UpdateServerException e)
+        {
+            Console.WriteLine(e.Message);
+            ErrorOccurred?.Invoke(new UpdateErrorInfo(e.Error));
+            return false;
+        }
+    }
+
+    //Returns true when this launcher replaced itself and is restarting
+    private async Task<bool> ApplyPackages(CancellationToken token)
+    {
+        if (_packages == null || token.IsCancellationRequested) return false;
+
+        _packagesApplied = true;
+        try
+        {
+            return await _packages.ApplyAsync(_packageUpdates, progress => ProgressChanged?.Invoke(progress),
+                error => ErrorOccurred?.Invoke(error), token);
         }
         catch (Exception e) when (!token.IsCancellationRequested)
         {
             Console.WriteLine(e.ToString());
             ErrorOccurred?.Invoke(new UpdateErrorInfo(UpdateError.LauncherFailed));
+            return false;
         }
     }
 

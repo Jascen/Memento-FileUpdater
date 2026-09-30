@@ -15,7 +15,11 @@ public static class Strings
     public const string ComparingFiles = "Comparing your files to the server.. ({0}/{1})"; //{0} = current file, {1} = total files
     public const string InstallingTazUO = "Setting up the TazUO launcher..";
     public const string UpdatesReady = "Updates are ready to download.";
-    public const string LauncherReady = "The TazUO launcher is ready to download.";
+    public const string PackagesReady = "Launcher updates are ready to download.";
+    public const string UpdatingLauncher = "Updating the launcher..";
+    public const string DownloadingLauncher = "Downloading the launcher update.. {0} of {1}"; //{0} = downloaded, {1} = total size
+    public const string DownloadingTazUO = "Downloading the TazUO launcher.. {0} of {1}"; //{0} = downloaded, {1} = total size
+    public const string Restarting = "Restarting the launcher..";
     public const string DownloadingFiles = "Downloading files from the server.. ({0}/{1}) - ({2})"; //{0} = current file, {1} = total files, {2} dl speed
     public const string DownloadingBytes = "Downloading.. {0} of {1} - {2}, {3} left"; //{0} = downloaded, {1} = total size, {2} = speed, {3} = time left. Used when the server sends file sizes
     public const string CurrentFile = "{0}"; //{0} = file name, shown on the red bar
@@ -26,6 +30,9 @@ public static class Strings
     public const string BadData = "Got bad data from server, please try again later."; //Malformed JSON response
     public const string UnknownError = "An unknown error occured, please try again later.";
     public const string TazUOError = "Couldn't set up the TazUO launcher, it will be retried next time.";
+    public const string SelfUpdateError = "Couldn't update the launcher, it will be retried next time.";
+    public const string PackagesUntrustedError = "The server's launcher updates couldn't be verified, so they were not installed.";
+    public const string PackagesNotConfigured = "This launcher has no signing key set up, so it can't install the TazUO launcher.";
     public const string FileFailedError = "Failed to download [{0}] after several attempts, skipping.."; //{0} = file name
     public const string FileLockedError = "[{0}] is in use. Close the game and click Retry to finish updating."; //{0} = file name
     public const string LaunchError = "Unable to start the TazUO launcher."; //Play button couldn't start it

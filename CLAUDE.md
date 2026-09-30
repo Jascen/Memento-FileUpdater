@@ -34,9 +34,13 @@ SimpleFileUpdater/
 │   │   ├── CacheService.cs      # Background cache service (watches the files directory)
 │   │   ├── FileListBuilder.cs   # Builds the file list, reusing hashes of unchanged files
 │   │   ├── FileLoggerProvider.cs # Writes logs to LogFilePath
+│   │   ├── FileRequestHandler.cs # Serves one file (path checks, size limit, download slots, ranges) for /file and /packages
 │   │   ├── FileUpdaterServer.csproj  # Project file
 │   │   └── settings.ini     # Server configuration file
-│   └── Server.Tests/        # xUnit tests for the file list builder
+│   ├── Server.Tests/        # xUnit tests for the file list builder and the file request handler
+│   ├── PackageManifest/     # Shared library: manifest model, package file naming, manifest builder, ECDSA signing/verification
+│   ├── PackageManifest.Tests/ # xUnit tests for PackageManifest
+│   └── PackageSigner/       # Admin CLI (run locally, never on the server): keygen, sign, verify
 ├── README.md
 ├── LICENSE
 └── CLAUDE.md
@@ -122,9 +126,9 @@ The client uses Avalonia UI framework with MVVM pattern:
 - **Main Window**: `Views/MainWindow.axaml(.cs)` → view only. Forwards clicks to the view model and implements `IMainView` (settings/confirm dialogs, opening links, restarting), dimming the launcher while a dialog is open
 - **View Model**: `ViewModels/MainViewModel.cs` → launcher state and actions: startup (install folder, preferences, check on launch), Verify, the center Download/Play button, settings, cancel. Subscribes to `UpdateService` events and posts them to the UI thread
 - **Dialogs**: `Views/SettingsDialog` (install folder + preferences), `ConfirmDialog` (generic yes/no)
-- **Config**: `Config/LauncherConfig.cs` (build-time branding, colors, server URL, links, folders), `Config/TazUOLauncherConfig.cs` (whether TazUO is used, its release URL, install folder and profiles), `Config/Strings.cs` (all on-screen text)
+- **Config**: `Config/LauncherConfig.cs` (build-time branding, colors, server URL, links, folders), `Config/TazUOLauncherConfig.cs` (whether TazUO is used, its install folder and profiles), `Config/Strings.cs` (all on-screen text)
 - **Player state**: `UserSettings/InstallLocation.cs` (install folder), `UserSettings/Preferences.cs` (settings dialog options), both saved under `%AppData%/<AppDataFolder>/`
-- **TazUO**: `TazUO/TazUOLauncher.cs` → installs the TazUO launcher and its profiles (`ILauncherInstaller`) and starts it
+- **TazUO**: `TazUO/TazUOLauncher.cs` → unpacks the TazUO launcher from a package zip and creates its profiles (`IClientInstaller`), and starts it. It is never downloaded from GitHub
 
 ### Update Logic (`src/Client/Updating/`)
 
@@ -133,10 +137,11 @@ No Avalonia or UI code, so it can be tested on its own:
 - `FileServerClient` → HTTP: fetches the file list (5s timeout) and downloads a file to `.part`, checks its MD5, then moves it into place (15 min timeout). A `.part` left by a failed or cancelled attempt is resumed with a Range request; one that fails the MD5 check is deleted so the next attempt starts over. File names are URL-escaped per path segment. Takes an optional `HttpMessageHandler` so tests can fake the server, and writes files through `LocalFiles`
 - `LocalFiles` → path safety (`TryGetLocalPath` rejects names outside the install folder), MD5, directory creation and file writes. All file access goes through an injected `IFileSystem` (System.IO.Abstractions): the app passes `new FileSystem()`, tests pass a `MockFileSystem`
 - `UpdateService` → one instance per install folder:
-  1. **CheckAsync()**: fetches the file list and compares local MD5s with `WORKER_COUNT` (2) workers, stopping at the first difference. Returns `UpdatesReady`, `LauncherReady` (TazUO missing), `Finished`, `Failed` or `Cancelled`; nothing is downloaded
-  2. **DownloadAsync()**: runs after the player clicks "Download updates". Compares the files the check skipped, then downloads with `WORKER_COUNT` workers (up to 5 attempts per file, with backoff), then installs TazUO if enabled
+  1. **CheckAsync()**: fetches the file list, asks `IPackageUpdater` what is out of date in the signed package manifest, and compares local MD5s with `WORKER_COUNT` (2) workers, stopping at the first difference. Returns `UpdatesReady` (files differ), `PackagesReady` (only a launcher or client package is out of date or missing), `Finished`, `Failed` (including an untrusted manifest) or `Cancelled`; nothing is downloaded
+  2. **DownloadAsync()**: runs after the player clicks "Download updates". First applies packages (launcher, then client; if the launcher replaced itself it returns `Restarting` and stops), then compares the files the check skipped and downloads with `WORKER_COUNT` workers (up to 5 attempts per file, with backoff)
   - Reports through `ProgressChanged`, `FileProgressChanged` and `ErrorOccurred` events (raised on background threads) and `FilesVerified`
-- `UpdateTypes.cs` → the progress, error and result types and `ILauncherInstaller`
+- `PackageUpdater` (`IPackageUpdater`) → keeps the launcher and the TazUO launcher up to date from the server's signed packages: `CheckAsync` verifies the manifest signature (`FileServerClient.GetPackageManifestAsync`, against `LauncherConfig.TrustedPublicKeys`) and compares versions (only upgrades, never downgrades); `ApplyAsync` downloads each package (SHA-256 checked against the signed manifest, up to 3 attempts), hands a launcher package to `ISelfUpdater` (currently the `NotImplementedSelfUpdater` stub) and unpacks a client package through `IClientInstaller`. The installed client version is remembered per user by `UserSettings/PackageState.cs`. `PlatformId` names the platform like the packages (`win-x64`) and `LauncherVersion` reads this launcher's build version
+- `UpdateTypes.cs` → the progress, error and result types
 
 ### Server Architecture
 
@@ -190,6 +195,14 @@ The server is an ASP.NET Core minimal API application with the following compone
   - Returns 404 if file doesn't exist
   - Returns 413 if file exceeds `MaxFileSize` limit
 
+- **GET /packages/manifest.json**, **GET /packages/manifest.sig**: the signed list of launcher and client packages (served from `PackagesDirectory`, never regenerated by the server, `Cache-Control: no-cache`)
+- **GET /packages/file/{name}**: streams a package zip from `PackagesDirectory` (flat folder, same limits and range support as `/file`)
+
+**Hosted packages and signing:**
+- Packages are named `{role}-{version}.{rid}.zip` with role `launcher` or `client`, e.g. `launcher-1.2.0.win-x64.zip`. The manifest lists only the newest version per role and platform, with SHA-256 and size
+- The admin signs on their own machine with `src/PackageSigner` (`keygen`, then `sign --packages <dir> --key <file>`, which writes `manifest.json` and `manifest.sig` into the folder, then upload the folder). The private key never goes on the server or in git (`*.key` is ignored). `PACKAGE_SIGNER_PASSWORD` supplies the key password non-interactively
+- ECDSA P-256 over the exact bytes of `manifest.json`; `manifest.sig` is base64. Launchers will trust a list of public keys (base64 SubjectPublicKeyInfo) so keys can be rotated. `PackageManifest` holds the verification code the launcher will use
+
 **Security Features:**
 - Path traversal protection prevents access outside `files/` directory
 - Configurable max file size to prevent abuse
@@ -214,6 +227,7 @@ Branding/configuration is in `src/Client/Config/LauncherConfig.cs`, TazUO launch
 - `TazUOLauncherConfig.Enabled`: When false, the TazUO launcher is never downloaded, there is no Play Now button, and the play warning option is hidden from Settings
 - `DownloadButton`, `PlayText`: Center button; shows `DownloadButton` while updates are waiting, then `PlayText`, which opens the TazUO launcher once it is installed. If the files weren't fully verified it first asks the player to confirm (`UnverifiedTitle`, `UnverifiedMessage`)
 - Player settings (cog button, modal `SettingsDialog`): install directory (saved by `InstallLocation.cs`; changing it cancels anything running and re-checks the new folder), plus verify files on launch and warn before playing with unverified files (saved to `%AppData%/<AppDataFolder>/settings.json` by `Preferences.cs`)
+- `TrustedPublicKeys`: public keys (from `PackageSigner keygen`) the server's packages must be signed with. Empty means no package is installed or run, and the TazUO launcher can't be installed
 - `UpdateUrl`: Server endpoint (must include trailing slash if using path segments)
 - `Finished`, `ReqFileList`, `ComparingFiles`, `DownloadingFiles`: Status messages (support `string.Format` placeholders)
 - Error messages: `ConError`, `BadData`, `UnknownError`, `FileFailedError`, `FileLockedError`. After a failed check or failed files, the status reads `CheckFailed` or `FinishedWithFailures` and a Retry button (`RetryText`) appears next to the error
@@ -234,6 +248,7 @@ All server configuration is in `src/Server/settings.ini`:
 
 **Files Section:**
 - `FilesDirectory`: Directory containing files to serve (default: ./files/)
+- `PackagesDirectory`: Directory with the signed launcher and client packages (default: ./packages/)
 - `CacheFileName`: Cache file name (default: jsoncache.json)
 - `WatchFilesDirectory`: Rebuild the file list shortly after files change (default: true)
 - `FileSettleTime`: Seconds a file must go unmodified before it is published (default: 5)

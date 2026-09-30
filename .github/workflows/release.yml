@@ -3,6 +3,8 @@ name: Release
 # Builds the launcher for every platform and the server for Windows and Linux.
 # Push a tag like v1.0.0 to publish a GitHub release with the zips attached,
 # or run it by hand from the Actions tab to just get the zips as build artifacts.
+# The launcher zips are named launcher-{version}.{rid}.zip, ready to sign and host with the PackageSigner tool.
+# The version comes from the tag (use plain numbers like v1.2.3) and is built into the launcher exe.
 on:
   push:
     tags: ['v*']
@@ -31,14 +33,24 @@ jobs:
         with:
           dotnet-version: 9.0.x
 
+      - name: Version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then version="${GITHUB_REF_NAME#v}"; else version="0.0.${{ github.run_number }}"; fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
       - name: Publish
         shell: bash
-        run: dotnet publish src/${{ matrix.project }} -c Release -r ${{ matrix.rid }} --self-contained -o publish
+        run: dotnet publish src/${{ matrix.project }} -c Release -r ${{ matrix.rid }} --self-contained -p:Version=$VERSION -o publish
 
       - name: Zip
         shell: bash
         run: |
-          name="${{ matrix.project }}-${{ matrix.rid }}.zip"
+          if [ "${{ matrix.project }}" = "Client" ]; then
+            name="launcher-$VERSION.${{ matrix.rid }}.zip"
+          else
+            name="${{ matrix.project }}-${{ matrix.rid }}.zip"
+          fi
           if [ "$RUNNER_OS" = "Windows" ]; then
             7z a "$name" ./publish/*
           else
