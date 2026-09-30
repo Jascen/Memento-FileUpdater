@@ -225,7 +225,24 @@ public class UpdateServiceTests
     }
 
     [Fact]
-    public async Task DownloadStopsWhenTheLauncherReplacesItself()
+    public async Task ANewerLauncherDoesntHoldUpTheCheck()
+    {
+        //Arrange
+        _server.Add("a.mul", "same");
+        WriteLocal("a.mul", "same");
+        var packages = new FakePackageUpdater { Updates = FakePackageUpdater.LauncherPending };
+        var service = CreateService(packages);
+
+        //Act
+        var result = await service.CheckAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result); //Not PackagesReady: Play stays available
+        Assert.Equal("2.0.0", service.LauncherUpdate?.Version);
+    }
+
+    [Fact]
+    public async Task DownloadNeverReplacesTheLauncher()
     {
         //Arrange
         _server.Add("a.mul", "new");
@@ -237,8 +254,75 @@ public class UpdateServiceTests
         var result = await service.DownloadAsync();
 
         //Assert
+        Assert.Equal(UpdateResult.Finished, result);
+        Assert.Empty(packages.LauncherUpdates);
+        Assert.Equal("new", ReadLocal("a.mul")); //Files were still downloaded
+    }
+
+    [Fact]
+    public async Task UpdateLauncherReportsRestartingWhenTheLauncherReplacesItself()
+    {
+        //Arrange
+        var packages = new FakePackageUpdater { Updates = FakePackageUpdater.LauncherPending, Restart = true };
+        var service = CreateService(packages);
+        await service.CheckAsync();
+
+        //Act
+        var result = await service.UpdateLauncherAsync();
+
+        //Assert
         Assert.Equal(UpdateResult.Restarting, result);
-        Assert.Empty(_server.Downloads); //The new launcher does the file update
+        Assert.Equal("2.0.0", Assert.Single(packages.LauncherUpdates).Version);
+    }
+
+    [Fact]
+    public async Task UpdateLauncherFailsWhenItIsNotApplied()
+    {
+        //Arrange
+        var packages = new FakePackageUpdater { Updates = FakePackageUpdater.LauncherPending };
+        var service = CreateService(packages);
+        await service.CheckAsync();
+
+        //Act
+        var result = await service.UpdateLauncherAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Failed, result);
+    }
+
+    [Fact]
+    public async Task UpdateLauncherDoesNothingWhenThereIsNoNewerLauncher()
+    {
+        //Arrange
+        var packages = new FakePackageUpdater();
+        var service = CreateService(packages);
+        await service.CheckAsync();
+
+        //Act
+        var result = await service.UpdateLauncherAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result);
+        Assert.Empty(packages.LauncherUpdates);
+    }
+
+    [Fact]
+    public async Task RefreshFindsANewerLauncherAndIgnoresCheckFailures()
+    {
+        //Arrange
+        var packages = new FakePackageUpdater();
+        var service = CreateService(packages);
+
+        //Act
+        packages.Updates = FakePackageUpdater.LauncherPending;
+        await service.RefreshLauncherUpdateAsync();
+        var found = service.LauncherUpdate;
+        packages.CheckError = new UpdateServerException(UpdateError.ConnectionFailed, "offline");
+        await service.RefreshLauncherUpdateAsync();
+
+        //Assert
+        Assert.Equal("2.0.0", found?.Version);
+        Assert.Equal("2.0.0", service.LauncherUpdate?.Version); //A failed refresh keeps what was known
     }
 
     [Fact]

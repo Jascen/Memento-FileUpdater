@@ -1,3 +1,4 @@
+using FileUpdaterPackages;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Enumeration;
@@ -66,6 +67,55 @@ public class UpdateService
 
     public void Cancel() => _cancellation.Cancel();
 
+    //A newer version of this launcher found by the last check or refresh, or null. It never holds anything else up:
+    //the player decides when to apply it with UpdateLauncherAsync
+    public PackageEntry? LauncherUpdate => _packageUpdates.Launcher;
+
+    //Looks at the server's signed manifest again for a newer launcher, without comparing any files.
+    //Meant for checking now and then while the launcher stays open, so failures are only logged
+    public async Task RefreshLauncherUpdateAsync()
+    {
+        if (_packages == null) return;
+
+        try
+        {
+            var found = await _packages.CheckAsync(CancellationToken.None);
+            _packageUpdates = _packageUpdates with { Launcher = found.Launcher };
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Couldn't check for a launcher update: {e.Message}");
+        }
+    }
+
+    //Downloads the launcher update found by the last check and replaces this launcher with it.
+    //Finished means there was nothing to do, Restarting that the new launcher is taking over, Failed that the update
+    //couldn't be applied (ErrorOccurred says why) and this launcher carries on
+    public async Task<UpdateResult> UpdateLauncherAsync()
+    {
+        var launcher = _packageUpdates.Launcher;
+        if (_packages == null || launcher == null) return UpdateResult.Finished;
+
+        if (_cancellation.IsCancellationRequested) _cancellation = new CancellationTokenSource();
+        var token = _cancellation.Token;
+        try
+        {
+            var restarting = await _packages.UpdateLauncherAsync(launcher, progress => ProgressChanged?.Invoke(progress),
+                error => ErrorOccurred?.Invoke(error), token);
+            return restarting ? UpdateResult.Restarting : UpdateResult.Failed;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            return UpdateResult.Cancelled;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e.ToString());
+            ErrorOccurred?.Invoke(new UpdateErrorInfo(UpdateError.SelfUpdateFailed));
+            return UpdateResult.Failed;
+        }
+    }
+
     //Checks the server's file list against local files, stopping at the first difference. Nothing is downloaded here
     public Task<UpdateResult> CheckAsync() => RunAsync(async token =>
     {
@@ -83,13 +133,14 @@ public class UpdateService
         return await Finish(token);
     });
 
-    //Updates this launcher and the TazUO launcher, then checks the files CheckAsync skipped and downloads everything that differs
+    //Installs the TazUO launcher if needed, then checks the files CheckAsync skipped and downloads everything that differs.
+    //A newer version of this launcher is not applied here, that is UpdateLauncherAsync
     public Task<UpdateResult> DownloadAsync() => RunAsync(async token =>
     {
         if (_needsFileList && !await LoadFileList(token)) return UpdateResult.Failed;
         if (!await CheckPackages(token)) return UpdateResult.Failed;
 
-        if (await ApplyPackages(token)) return UpdateResult.Restarting; //Replaced itself, the new launcher carries on
+        await ApplyPackages(token);
         token.ThrowIfCancellationRequested();
 
         await CompareFiles(stopAtFirstDifference: false);
@@ -181,22 +232,20 @@ public class UpdateService
         }
     }
 
-    //Returns true when this launcher replaced itself and is restarting
-    private async Task<bool> ApplyPackages(CancellationToken token)
+    private async Task ApplyPackages(CancellationToken token)
     {
-        if (_packages == null || token.IsCancellationRequested) return false;
+        if (_packages == null || token.IsCancellationRequested) return;
 
         _packagesApplied = true;
         try
         {
-            return await _packages.ApplyAsync(_packageUpdates, progress => ProgressChanged?.Invoke(progress),
+            await _packages.ApplyAsync(_packageUpdates, progress => ProgressChanged?.Invoke(progress),
                 error => ErrorOccurred?.Invoke(error), token);
         }
         catch (Exception e) when (!token.IsCancellationRequested)
         {
             Console.WriteLine(e.ToString());
             ErrorOccurred?.Invoke(new UpdateErrorInfo(UpdateError.LauncherFailed));
-            return false;
         }
     }
 

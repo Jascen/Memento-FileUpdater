@@ -1,4 +1,5 @@
 ﻿using Avalonia;
+using FileUpdaterClient.Updating;
 
 namespace FileUpdaterClient;
 
@@ -12,7 +13,13 @@ internal class Program
             .LogToTrace();
 
     // Entry point of the application
-    public static void Main(string[] args)
-        => BuildAvaloniaApp()
-            .StartWithClassicDesktopLifetime(args);
+    public static int Main(string[] args)
+    {
+        //A temporary copy of the launcher started by SelfUpdater to swap in a new version, with no window
+        if (args.Length > 0 && args[0] == SelfUpdater.ApplyArgument)
+            return SelfUpdater.RunApply(args);
+
+        SelfUpdater.CleanUpTempFolders();
+        return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    }
 }

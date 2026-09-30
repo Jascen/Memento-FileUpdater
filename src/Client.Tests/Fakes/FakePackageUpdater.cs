@@ -15,19 +15,27 @@ public class FakePackageUpdater : IPackageUpdater
     public PackageUpdates Updates { get; set; } = PackageUpdates.None;
     public Exception? CheckError { get; set; }
     public UpdateError? ApplyError { get; set; } //Reported through the error callback, like a failed install
-    public bool Restart { get; set; } //Apply reports the launcher replaced itself
+    public bool Restart { get; set; } //UpdateLauncherAsync reports the launcher replaced itself
     public Action? OnApply { get; set; }
     public int ApplyCount { get; private set; }
+    public List<PackageEntry> LauncherUpdates { get; } = new();
 
     public Task<PackageUpdates> CheckAsync(CancellationToken cancellationToken) =>
         CheckError == null ? Task.FromResult(Updates) : Task.FromException<PackageUpdates>(CheckError);
 
-    public Task<bool> ApplyAsync(PackageUpdates updates, Action<UpdateProgress> progress, Action<UpdateErrorInfo> error,
+    public Task ApplyAsync(PackageUpdates updates, Action<UpdateProgress> progress, Action<UpdateErrorInfo> error,
         CancellationToken cancellationToken)
     {
         ApplyCount++;
         OnApply?.Invoke();
         if (ApplyError is { } applyError) error(new UpdateErrorInfo(applyError));
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> UpdateLauncherAsync(PackageEntry launcher, Action<UpdateProgress> progress, Action<UpdateErrorInfo> error,
+        CancellationToken cancellationToken)
+    {
+        LauncherUpdates.Add(launcher);
         return Task.FromResult(Restart);
     }
 }

@@ -42,8 +42,11 @@ public class PackageUpdaterTests : IDisposable
         };
     }
 
-    private Task<bool> Apply(PackageUpdater updater, PackageUpdates updates) =>
+    private Task Apply(PackageUpdater updater, PackageUpdates updates) =>
         updater.ApplyAsync(updates, _progress.Add, _errors.Add, CancellationToken.None);
+
+    private Task<bool> UpdateLauncher(PackageUpdater updater, PackageUpdates updates) =>
+        updater.UpdateLauncherAsync(updates.Launcher!, _progress.Add, _errors.Add, CancellationToken.None);
 
     [Fact]
     public async Task CheckReportsNoManifestWhenTheServerHostsNoPackages()
@@ -185,10 +188,9 @@ public class PackageUpdaterTests : IDisposable
         var updates = await updater.CheckAsync(CancellationToken.None);
 
         //Act
-        var restarting = await Apply(updater, updates);
+        await Apply(updater, updates);
 
         //Assert
-        Assert.False(restarting);
         Assert.Equal("client-bytes", _client.InstalledContent);
         Assert.Equal(new Version(2, 0, 0), _state.ClientVersion);
         Assert.Equal(1, _client.ProfileSetups);
@@ -237,7 +239,7 @@ public class PackageUpdaterTests : IDisposable
     }
 
     [Fact]
-    public async Task ApplyPassesTheVerifiedLauncherToTheSelfUpdaterAndStopsWhenItRestarts()
+    public async Task UpdateLauncherPassesTheVerifiedPackageToTheSelfUpdater()
     {
         //Arrange
         _server.PublishPackages(_key, (PackageRole.Launcher, "1.5.0", Rid, "launcher-bytes"), (PackageRole.Client, "2.0.0", Rid, "client"));
@@ -246,7 +248,7 @@ public class PackageUpdaterTests : IDisposable
         var updates = await updater.CheckAsync(CancellationToken.None);
 
         //Act
-        var restarting = await Apply(updater, updates);
+        var restarting = await UpdateLauncher(updater, updates);
 
         //Assert
         Assert.True(restarting);
@@ -257,60 +259,94 @@ public class PackageUpdaterTests : IDisposable
     }
 
     [Fact]
-    public async Task ApplyCarriesOnWhenTheSelfUpdaterDeclines()
+    public async Task ApplyLeavesTheLauncherAloneEvenWhenANewerOneIsHosted()
     {
         //Arrange
         _server.PublishPackages(_key, (PackageRole.Launcher, "1.5.0", Rid, "launcher"), (PackageRole.Client, "2.0.0", Rid, "client"));
-        var updater = CreateUpdater(); //_self.Restarts is false, like the stub
+        var updater = CreateUpdater();
         var updates = await updater.CheckAsync(CancellationToken.None);
 
         //Act
-        var restarting = await Apply(updater, updates);
+        await Apply(updater, updates);
+
+        //Assert
+        Assert.Empty(_self.Applied);
+        Assert.True(_client.IsInstalled);
+        Assert.Empty(_errors);
+        Assert.DoesNotContain(_progress, p => p.Phase == UpdatePhase.UpdatingLauncher); //Never even downloaded
+    }
+
+    [Fact]
+    public async Task ALauncherUpdateAloneIsNotSomethingTheNextDownloadNeedsToDo()
+    {
+        //Arrange
+        _client.IsInstalled = true;
+        _state.ClientVersion = new Version(2, 0, 0);
+        _server.PublishPackages(_key, (PackageRole.Launcher, "1.5.0", Rid, "launcher"), (PackageRole.Client, "2.0.0", Rid, "client"));
+        var updater = CreateUpdater();
+
+        //Act
+        var updates = await updater.CheckAsync(CancellationToken.None);
+
+        //Assert
+        Assert.NotNull(updates.Launcher);
+        Assert.False(updates.Any);
+    }
+
+    [Fact]
+    public async Task UpdateLauncherCarriesOnWhenTheSelfUpdaterDeclines()
+    {
+        //Arrange
+        _server.PublishPackages(_key, (PackageRole.Launcher, "1.5.0", Rid, "launcher"));
+        var updater = CreateUpdater(); //_self.Restarts is false
+        var updates = await updater.CheckAsync(CancellationToken.None);
+
+        //Act
+        var restarting = await UpdateLauncher(updater, updates);
         var next = await updater.CheckAsync(CancellationToken.None);
 
         //Assert
         Assert.False(restarting);
-        Assert.True(_client.IsInstalled);
         Assert.Empty(_errors);
         Assert.Null(next.Launcher); //Not offered again this run
         Assert.DoesNotContain(_fileSystem.AllFiles, f => f.StartsWith(Downloads));
     }
 
     [Fact]
-    public async Task ApplyReportsASelfUpdateFailureAndCarriesOn()
+    public async Task UpdateLauncherReportsASelfUpdateFailure()
     {
         //Arrange
-        _server.PublishPackages(_key, (PackageRole.Launcher, "1.5.0", Rid, "launcher"), (PackageRole.Client, "2.0.0", Rid, "client"));
+        _server.PublishPackages(_key, (PackageRole.Launcher, "1.5.0", Rid, "launcher"));
         _self.Error = new InvalidOperationException("swap failed");
         var updater = CreateUpdater();
         var updates = await updater.CheckAsync(CancellationToken.None);
 
         //Act
-        var restarting = await Apply(updater, updates);
+        var restarting = await UpdateLauncher(updater, updates);
 
         //Assert
         Assert.False(restarting);
-        Assert.True(_client.IsInstalled);
         Assert.Equal([new UpdateErrorInfo(UpdateError.SelfUpdateFailed)], _errors);
     }
 
     [Fact]
-    public async Task ApplyReportsALauncherThatCantBeDownloadedAndCarriesOn()
+    public async Task UpdateLauncherReportsAPackageThatCantBeVerifiedAndCanBeTriedAgain()
     {
         //Arrange
-        _server.PublishPackages(_key, (PackageRole.Launcher, "1.5.0", Rid, "launcher"), (PackageRole.Client, "2.0.0", Rid, "client"));
+        _server.PublishPackages(_key, (PackageRole.Launcher, "1.5.0", Rid, "launcher"));
         _server.TamperWithPackage(PackageRole.Launcher, "1.5.0", Rid, "not what was signed");
         var updater = CreateUpdater();
         var updates = await updater.CheckAsync(CancellationToken.None);
 
         //Act
-        var restarting = await Apply(updater, updates);
+        var restarting = await UpdateLauncher(updater, updates);
+        var next = await updater.CheckAsync(CancellationToken.None);
 
         //Assert
         Assert.False(restarting);
         Assert.Empty(_self.Applied); //Never handed an unverified package
-        Assert.True(_client.IsInstalled);
         Assert.Equal([new UpdateErrorInfo(UpdateError.SelfUpdateFailed)], _errors);
+        Assert.NotNull(next.Launcher); //Still offered, the download may just have been corrupted
     }
 
     [Theory]
@@ -365,7 +401,7 @@ public class PackageUpdaterTests : IDisposable
     }
 
     [Fact]
-    public async Task ApplyOnlyUpdatesTheLauncherWhenTheTazUOLauncherIsOff()
+    public async Task UpdateLauncherWorksWhenTheTazUOLauncherIsOff()
     {
         //Arrange
         _server.PublishPackages(_key, (PackageRole.Launcher, "1.5.0", Rid, "launcher"));
@@ -373,6 +409,7 @@ public class PackageUpdaterTests : IDisposable
         var updates = await updater.CheckAsync(CancellationToken.None);
 
         //Act
+        await UpdateLauncher(updater, updates);
         await Apply(updater, updates);
 
         //Assert
