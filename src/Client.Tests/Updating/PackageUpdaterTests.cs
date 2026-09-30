@@ -1,4 +1,4 @@
-﻿using System.IO.Abstractions.TestingHelpers;
+using System.IO.Abstractions.TestingHelpers;
 using System.Security.Cryptography;
 using FileUpdaterClient.Tests.Fakes;
 using FileUpdaterClient.Updating;

@@ -1,4 +1,4 @@
-﻿# CLAUDE.md
+# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -14,36 +14,36 @@ The client downloads only files that differ (by MD5 hash) or are missing, avoidi
 
 ```
 SimpleFileUpdater/
-â”œâ”€â”€ src/
-â”‚   â”œâ”€â”€ Client/              # C# .NET client application
-â”‚   â”‚   â”œâ”€â”€ App.axaml(.cs), Program.cs  # Entry point and application
-â”‚   â”‚   â”œâ”€â”€ Views/           # Windows and dialogs (MainWindow, SettingsDialog, ConfirmDialog)
-â”‚   â”‚   â”œâ”€â”€ ViewModels/      # MainViewModel and IMainView
-â”‚   â”‚   â”œâ”€â”€ Config/          # Build-time config (LauncherConfig, TazUOLauncherConfig) and on-screen text (Strings)
-â”‚   â”‚   â”œâ”€â”€ UserSettings/    # Player choices saved per user (InstallLocation, Preferences)
-â”‚   â”‚   â”œâ”€â”€ TazUO/           # TazUO launcher install and start
-â”‚   â”‚   â”œâ”€â”€ Updating/        # UI-free update logic (server client, file checks, UpdateService)
-â”‚   â”‚   â”œâ”€â”€ Assets/          # Visual assets (background.png, icon.ico)
-â”‚   â”‚   â”œâ”€â”€ *.csproj         # Project file
-â”‚   â”‚   â””â”€â”€ *.sln            # Solution file
-â”‚   â”œâ”€â”€ Client.Tests/        # xUnit tests for the update logic (Updating/, plus Fakes/ for the fake server and launcher)
-â”‚   â”œâ”€â”€ Server/              # C# .NET server application
-â”‚   â”‚   â”œâ”€â”€ Program.cs       # Main entry point with endpoints
-â”‚   â”‚   â”œâ”€â”€ ServerSettings.cs    # Configuration model
-â”‚   â”‚   â”œâ”€â”€ IniConfigProvider.cs # INI file parser
-â”‚   â”‚   â”œâ”€â”€ CacheService.cs      # Background cache service (watches the files directory)
-â”‚   â”‚   â”œâ”€â”€ FileListBuilder.cs   # Builds the file list, reusing hashes of unchanged files
-â”‚   â”‚   â”œâ”€â”€ FileLoggerProvider.cs # Writes logs to LogFilePath
-â”‚   â”‚   â”œâ”€â”€ FileRequestHandler.cs # Serves one file (path checks, size limit, download slots, ranges) for /file and /packages
-â”‚   â”‚   â”œâ”€â”€ FileUpdaterServer.csproj  # Project file
-â”‚   â”‚   â””â”€â”€ settings.ini     # Server configuration file
-â”‚   â”œâ”€â”€ Server.Tests/        # xUnit tests for the file list builder and the file request handler
-â”‚   â”œâ”€â”€ PackageManifest/     # Shared library: manifest model, package file naming, manifest builder, ECDSA signing/verification
-â”‚   â”œâ”€â”€ PackageManifest.Tests/ # xUnit tests for PackageManifest
-â”‚   â””â”€â”€ PackageSigner/       # Admin CLI (run locally, never on the server): keygen, sign, verify
-â”œâ”€â”€ README.md
-â”œâ”€â”€ LICENSE
-â””â”€â”€ CLAUDE.md
+├── src/
+│   ├── Client/              # C# .NET client application
+│   │   ├── App.axaml(.cs), Program.cs  # Entry point and application
+│   │   ├── Views/           # Windows and dialogs (MainWindow, SettingsDialog, ConfirmDialog)
+│   │   ├── ViewModels/      # MainViewModel and IMainView
+│   │   ├── Config/          # Build-time config (LauncherConfig, TazUOLauncherConfig) and on-screen text (Strings)
+│   │   ├── UserSettings/    # Player choices saved per user (InstallLocation, Preferences)
+│   │   ├── TazUO/           # TazUO launcher install and start
+│   │   ├── Updating/        # UI-free update logic (server client, file checks, UpdateService)
+│   │   ├── Assets/          # Visual assets (background.png, icon.ico)
+│   │   ├── *.csproj         # Project file
+│   │   └── *.sln            # Solution file
+│   ├── Client.Tests/        # xUnit tests for the update logic (Updating/, plus Fakes/ for the fake server and launcher)
+│   ├── Server/              # C# .NET server application
+│   │   ├── Program.cs       # Main entry point with endpoints
+│   │   ├── ServerSettings.cs    # Configuration model
+│   │   ├── IniConfigProvider.cs # INI file parser
+│   │   ├── CacheService.cs      # Background cache service (watches the files directory)
+│   │   ├── FileListBuilder.cs   # Builds the file list, reusing hashes of unchanged files
+│   │   ├── FileLoggerProvider.cs # Writes logs to LogFilePath
+│   │   ├── FileRequestHandler.cs # Serves one file (path checks, size limit, download slots, ranges) for /file and /packages
+│   │   ├── FileUpdaterServer.csproj  # Project file
+│   │   └── settings.ini     # Server configuration file
+│   ├── Server.Tests/        # xUnit tests for the file list builder and the file request handler
+│   ├── PackageManifest/     # Shared library: manifest model, package file naming, manifest builder, ECDSA signing/verification
+│   ├── PackageManifest.Tests/ # xUnit tests for PackageManifest
+│   └── PackageSigner/       # Admin CLI (run locally, never on the server): keygen, sign, verify
+├── README.md
+├── LICENSE
+└── CLAUDE.md
 ```
 
 ## Build Commands
@@ -121,27 +121,27 @@ Output location: `src/Server/bin/Release/net9.0/{runtime}/publish/`
 
 The client uses Avalonia UI framework with MVVM pattern:
 
-- **Entry Point**: `src/Client/Program.cs` â†’ bootstraps Avalonia with `App`
-- **Application**: `App.axaml(.cs)` â†’ shared styles/brushes, creates `MainViewModel` and `MainWindow`
-- **Main Window**: `Views/MainWindow.axaml(.cs)` â†’ view only. Forwards clicks to the view model and implements `IMainView` (settings/confirm dialogs, opening links, restarting), dimming the launcher while a dialog is open
-- **View Model**: `ViewModels/MainViewModel.cs` â†’ launcher state and actions: startup (install folder, preferences, check on launch), Verify, the center Download/Play button, settings, cancel. Subscribes to `UpdateService` events and posts them to the UI thread
+- **Entry Point**: `src/Client/Program.cs` → bootstraps Avalonia with `App`
+- **Application**: `App.axaml(.cs)` → shared styles/brushes, creates `MainViewModel` and `MainWindow`
+- **Main Window**: `Views/MainWindow.axaml(.cs)` → view only. Forwards clicks to the view model and implements `IMainView` (settings/confirm dialogs, opening links, restarting), dimming the launcher while a dialog is open
+- **View Model**: `ViewModels/MainViewModel.cs` → launcher state and actions: startup (install folder, preferences, check on launch), Verify, the center Download/Play button, settings, cancel. Subscribes to `UpdateService` events and posts them to the UI thread
 - **Dialogs**: `Views/SettingsDialog` (install folder + preferences), `ConfirmDialog` (generic yes/no)
 - **Config**: `Config/LauncherConfig.cs` (build-time branding, colors, server URL, links, folders), `Config/TazUOLauncherConfig.cs` (whether TazUO is used, its install folder and profiles), `Config/Strings.cs` (all on-screen text)
 - **Player state**: `UserSettings/InstallLocation.cs` (install folder), `UserSettings/Preferences.cs` (settings dialog options), both saved under `%AppData%/<AppDataFolder>/`
-- **TazUO**: `TazUO/TazUOLauncher.cs` â†’ unpacks the TazUO launcher from a package zip and creates its profiles (`IClientInstaller`), and starts it. It is never downloaded from GitHub
+- **TazUO**: `TazUO/TazUOLauncher.cs` → unpacks the TazUO launcher from a package zip and creates its profiles (`IClientInstaller`), and starts it. It is never downloaded from GitHub
 
 ### Update Logic (`src/Client/Updating/`)
 
 No Avalonia or UI code, so it can be tested on its own:
 
-- `FileServerClient` â†’ HTTP: fetches the file list (5s timeout) and downloads a file to `.part`, checks its MD5, then moves it into place (15 min timeout). A `.part` left by a failed or cancelled attempt is resumed with a Range request; one that fails the MD5 check is deleted so the next attempt starts over. File names are URL-escaped per path segment. Takes an optional `HttpMessageHandler` so tests can fake the server, and writes files through `LocalFiles`
-- `LocalFiles` â†’ path safety (`TryGetLocalPath` rejects names outside the install folder), MD5, directory creation and file writes. All file access goes through an injected `IFileSystem` (System.IO.Abstractions): the app passes `new FileSystem()`, tests pass a `MockFileSystem`
-- `UpdateService` â†’ one instance per install folder:
+- `FileServerClient` → HTTP: fetches the file list (5s timeout) and downloads a file to `.part`, checks its MD5, then moves it into place (15 min timeout). A `.part` left by a failed or cancelled attempt is resumed with a Range request; one that fails the MD5 check is deleted so the next attempt starts over. File names are URL-escaped per path segment. Takes an optional `HttpMessageHandler` so tests can fake the server, and writes files through `LocalFiles`
+- `LocalFiles` → path safety (`TryGetLocalPath` rejects names outside the install folder), MD5, directory creation and file writes. All file access goes through an injected `IFileSystem` (System.IO.Abstractions): the app passes `new FileSystem()`, tests pass a `MockFileSystem`
+- `UpdateService` → one instance per install folder:
   1. **CheckAsync()**: fetches the file list, asks `IPackageUpdater` what is out of date in the signed package manifest, and compares local MD5s with `WORKER_COUNT` (2) workers, stopping at the first difference. Returns `UpdatesReady` (files differ), `PackagesReady` (only a launcher or client package is out of date or missing), `Finished`, `Failed` (including an untrusted manifest) or `Cancelled`; nothing is downloaded
   2. **DownloadAsync()**: runs after the player clicks "Download updates". First applies packages (launcher, then client; if the launcher replaced itself it returns `Restarting` and stops), then compares the files the check skipped and downloads with `WORKER_COUNT` workers (up to 5 attempts per file, with backoff)
   - Reports through `ProgressChanged`, `FileProgressChanged` and `ErrorOccurred` events (raised on background threads) and `FilesVerified`
-- `PackageUpdater` (`IPackageUpdater`) â†’ keeps the launcher and the TazUO launcher up to date from the server's signed packages: `CheckAsync` verifies the manifest signature (`FileServerClient.GetPackageManifestAsync`, against `LauncherConfig.TrustedPublicKeys`) and compares versions (only upgrades, never downgrades); `ApplyAsync` downloads each package (SHA-256 checked against the signed manifest, up to 3 attempts), hands a launcher package to `ISelfUpdater` (currently the `NotImplementedSelfUpdater` stub) and unpacks a client package through `IClientInstaller`. The installed client version is remembered per user by `UserSettings/PackageState.cs`. `PlatformId` names the platform like the packages (`win-x64`) and `LauncherVersion` reads this launcher's build version
-- `UpdateTypes.cs` â†’ the progress, error and result types
+- `PackageUpdater` (`IPackageUpdater`) → keeps the launcher and the TazUO launcher up to date from the server's signed packages: `CheckAsync` verifies the manifest signature (`FileServerClient.GetPackageManifestAsync`, against `LauncherConfig.TrustedPublicKeys`) and compares versions (only upgrades, never downgrades); `ApplyAsync` downloads each package (SHA-256 checked against the signed manifest, up to 3 attempts), hands a launcher package to `ISelfUpdater` (currently the `NotImplementedSelfUpdater` stub) and unpacks a client package through `IClientInstaller`. The installed client version is remembered per user by `UserSettings/PackageState.cs`. `PlatformId` names the platform like the packages (`win-x64`) and `LauncherVersion` reads this launcher's build version
+- `UpdateTypes.cs` → the progress, error and result types
 
 ### Server Architecture
 
