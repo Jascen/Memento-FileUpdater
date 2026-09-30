@@ -33,6 +33,8 @@
 
   <ItemGroup>
     <None Remove="Assets\background.png" />
+    <!-- Window and taskbar icon (ApplicationIcon above only sets the exe icon, and only on Windows). Must be a real .ico, not a renamed PNG -->
+    <AvaloniaResource Include="Assets\icon.ico" />
     <!-- Replaceable art, loaded by Views/LauncherArt.cs. Keep each image's aspect ratio (see MainWindow.axaml); a missing one is left blank -->
     <AvaloniaResource Include="Assets\background.png" Condition="Exists('Assets\background.png')" />
     <AvaloniaResource Include="Assets\play-button.png" Condition="Exists('Assets\play-button.png')" />

@@ -6,7 +6,7 @@
         Width="900" Height="675" CanResize="False"
         SystemDecorations="None" WindowStartupLocation="CenterScreen"
         xmlns:vm="using:FileUpdaterClient.ViewModels"
-        xmlns:config="using:FileUpdaterClient.Config" xmlns:views="using:FileUpdaterClient.Views" Background="#141110"
+        xmlns:config="using:FileUpdaterClient.Config" xmlns:views="using:FileUpdaterClient.Views" Background="#141110" Icon="/Assets/icon.ico"
         x:Class="FileUpdaterClient.Views.MainWindow" x:DataType="vm:MainViewModel"
         PointerPressed="Window_PointerPressed">
 
