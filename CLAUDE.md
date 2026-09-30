@@ -223,7 +223,7 @@ Branding/configuration is in `src/Client/Config/LauncherConfig.cs`, TazUO launch
 - `Title`, `Subtitle`: Header text. `AppDataFolder` (where player settings are saved) follows `Title`, so forks with different titles don't share settings
 - Exe name: `<AssemblyName>` in `src/Client/FileUpdaterClient.csproj`
 - `TitleColor`, `SubtitleColor`: Hex color strings for text
-- `DefaultTextColor`, `ProgressBarBackground`: Brush colors
+- `DefaultTextColor` (progress bar text), `ProgressTextOutline` (dark halo behind it), `ProgressBarBackground` (empty bar track): Colors
 - `Links`: Top navigation links (`NavLink(label, url)`); `NavLink.VerifyAction` as the target re-runs the file check
 - `TazUOLauncherConfig.Enabled`: When false, the TazUO launcher is never downloaded, there is no Play Now button, and the play warning option is hidden from Settings
 - `DownloadButton`, `PlayText`: Center button; shows `DownloadButton` while updates are waiting, then `PlayText`, which opens the TazUO launcher once it is installed. If the files weren't fully verified it first asks the player to confirm (`UnverifiedTitle`, `UnverifiedMessage`)
@@ -237,7 +237,7 @@ Branding/configuration is in `src/Client/Config/LauncherConfig.cs`, TazUO launch
 
 Visual assets:
 - `src/Client/Assets/background.png`: Background image (window is 900x675, borderless)
-- `src/Client/Assets/icon.ico`: Application icon
+- `src/Client/Assets/icon.ico`: Exe, window and taskbar icon. Must be a real square .ico (ideally 16-256px sizes), not a renamed PNG
 - `src/Client/Assets/play-button.png` (270x96): Center Download/Play button; the label is drawn on top and the hover glow follows the image's shape
 - `src/Client/Assets/progress-frame.png` (560x60): Box around both progress bars; the bars sit 26px in from the sides and 6px from the top and bottom
 - `src/Client/Assets/progress-total.png`, `progress-file.png` (508x22): Fill of the top bar (all files) and bottom bar (current file), stretched to the full bar and revealed from the left

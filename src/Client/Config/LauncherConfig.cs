@@ -6,14 +6,15 @@ namespace FileUpdaterClient.Config;
 //TazUO launcher settings live in TazUOLauncherConfig.cs and on-screen text in Strings.cs. Player choices made at runtime live in Preferences.cs.
 public static class LauncherConfig
 {
-    public const string Title = "UODiablo";
-    public const string TitleColor = "#F3D58A";
+    public const string Title = "";
+    public const string TitleColor = "#F4EDD6";
 
-    public const string Subtitle = "Stay up to date with the latest UODiablo files";
-    public const string SubtitleColor = "#D9C9A3";
+    public const string Subtitle = "";
+    public const string SubtitleColor = "#D6E4DA";
 
-    public static SolidColorBrush DefaultTextColor = SolidColorBrush.Parse("#F2F2F2");
-    public static SolidColorBrush ProgressBarBackground = SolidColorBrush.Parse("#1A1512");
+    public static SolidColorBrush DefaultTextColor = SolidColorBrush.Parse("#FFF6DC"); //Text on the progress bars
+    public static Color ProgressTextOutline = Color.Parse("#1A0E2C"); //Dark halo around that text so it reads on both bright fills and the empty track
+    public static SolidColorBrush ProgressBarBackground = SolidColorBrush.Parse("#A0120E20");
 
     public const string UpdateUrl = "http://127.0.0.1:8080/";
 

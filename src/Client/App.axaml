@@ -5,11 +5,11 @@
     <Application.Resources>
         <FontFamily x:Key="DisplayFont">Cinzel, Trajan Pro, Georgia, Times New Roman, serif</FontFamily>
 
-        <LinearGradientBrush x:Key="GoldBrush" StartPoint="0%,0%" EndPoint="0%,100%">
-            <GradientStop Offset="0" Color="#FFF6D9" />
-            <GradientStop Offset="0.45" Color="#D9A953" />
-            <GradientStop Offset="0.55" Color="#9C6B2A" />
-            <GradientStop Offset="1" Color="#E8C379" />
+        <LinearGradientBrush x:Key="FrameBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+            <GradientStop Offset="0" Color="#D0C9DCD2" />
+            <GradientStop Offset="0.45" Color="#C08DAFA2" />
+            <GradientStop Offset="0.55" Color="#C0506F68" />
+            <GradientStop Offset="1" Color="#D0A6C2B6" />
         </LinearGradientBrush>
     </Application.Resources>
 
@@ -20,7 +20,7 @@
         <Style Selector="Button.chrome">
             <Setter Property="Width" Value="40" />
             <Setter Property="Height" Value="40" />
-            <Setter Property="Foreground" Value="#E8D6B0" />
+            <Setter Property="Foreground" Value="#E4ECE6" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Transitions">
                 <Transitions>
@@ -29,8 +29,8 @@
             </Setter>
             <Setter Property="Template">
                 <ControlTemplate>
-                    <Border Background="{TemplateBinding Background}" BorderBrush="#6B5431" BorderThickness="2"
-                            CornerRadius="2" BoxShadow="inset 0 0 8 0 #80000000">
+                    <Border Background="{TemplateBinding Background}" BorderBrush="#704A4270" BorderThickness="1.5"
+                            CornerRadius="4" BoxShadow="0 0 10 0 #60000000, inset 0 0 10 0 #60000000">
                         <ContentPresenter Name="Glyph" Content="{TemplateBinding Content}"
                                           Foreground="{TemplateBinding Foreground}"
                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -39,30 +39,30 @@
             </Setter>
         </Style>
         <Style Selector="Button.chrome.minimize">
-            <Setter Property="Background" Value="#3E3A24" />
+            <Setter Property="Background" Value="#B01E3A37" />
         </Style>
         <Style Selector="Button.chrome.minimize:pointerover">
-            <Setter Property="Background" Value="#5C5634" />
+            <Setter Property="Background" Value="#D02C5550" />
         </Style>
         <Style Selector="Button.chrome.close">
-            <Setter Property="Background" Value="#5A1717" />
+            <Setter Property="Background" Value="#B04A1830" />
         </Style>
         <Style Selector="Button.chrome.close:pointerover">
-            <Setter Property="Background" Value="#8A2020" />
+            <Setter Property="Background" Value="#D07A2446" />
         </Style>
         <Style Selector="Button.chrome.settings">
-            <Setter Property="Background" Value="#1E2A44" />
+            <Setter Property="Background" Value="#B02A2350" />
         </Style>
         <Style Selector="Button.chrome.settings:pointerover">
-            <Setter Property="Background" Value="#2E3F63" />
+            <Setter Property="Background" Value="#D03D3372" />
         </Style>
 
         <!-- Buttons along the bottom of dialogs -->
         <Style Selector="Button.dialog">
             <Setter Property="MinWidth" Value="110" />
             <Setter Property="Padding" Value="16,8" />
-            <Setter Property="Foreground" Value="#F2E6CC" />
-            <Setter Property="Background" Value="#3A120D" />
+            <Setter Property="Foreground" Value="#F4EDD6" />
+            <Setter Property="Background" Value="#2E2452" />
             <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
             <Setter Property="FontSize" Value="15" />
             <Setter Property="Cursor" Value="Hand" />
@@ -73,7 +73,7 @@
             </Setter>
             <Setter Property="Template">
                 <ControlTemplate>
-                    <Border Background="{TemplateBinding Background}" BorderBrush="{StaticResource GoldBrush}"
+                    <Border Background="{TemplateBinding Background}" BorderBrush="{StaticResource FrameBrush}"
                             BorderThickness="2" CornerRadius="3" Padding="{TemplateBinding Padding}">
                         <ContentPresenter Name="Label" Content="{TemplateBinding Content}"
                                           Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" />
@@ -82,13 +82,13 @@
             </Setter>
         </Style>
         <Style Selector="Button.dialog:pointerover">
-            <Setter Property="Background" Value="#6A2216" />
+            <Setter Property="Background" Value="#45377A" />
         </Style>
         <Style Selector="Button.dialog.secondary">
-            <Setter Property="Background" Value="#241C16" />
+            <Setter Property="Background" Value="#181426" />
         </Style>
         <Style Selector="Button.dialog.secondary:pointerover">
-            <Setter Property="Background" Value="#3A2E22" />
+            <Setter Property="Background" Value="#2A2340" />
         </Style>
     </Application.Styles>
 </Application>

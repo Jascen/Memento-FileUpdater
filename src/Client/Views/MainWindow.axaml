@@ -6,15 +6,15 @@
         Width="900" Height="675" CanResize="False"
         SystemDecorations="None" WindowStartupLocation="CenterScreen"
         xmlns:vm="using:FileUpdaterClient.ViewModels"
-        xmlns:config="using:FileUpdaterClient.Config" xmlns:views="using:FileUpdaterClient.Views" Background="#141110" Icon="/Assets/icon.ico"
+        xmlns:config="using:FileUpdaterClient.Config" xmlns:views="using:FileUpdaterClient.Views" Background="#0F0C1A" Icon="/Assets/icon.ico"
         x:Class="FileUpdaterClient.Views.MainWindow" x:DataType="vm:MainViewModel"
         PointerPressed="Window_PointerPressed">
 
     <Window.Styles>
-        <!-- Top navigation links: brighten and grow a gold underline from the center on hover -->
+        <!-- Top navigation links: brighten and grow a silver underline from the center on hover -->
         <Style Selector="Button.nav">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="#E3CF9E" />
+            <Setter Property="Foreground" Value="#D6E4DA" />
             <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
             <Setter Property="FontSize" Value="17" />
             <Setter Property="Padding" Value="14,0" />
@@ -29,7 +29,7 @@
                     <StackPanel Background="{TemplateBinding Background}" Margin="{TemplateBinding Padding}" Spacing="4">
                         <ContentPresenter Name="Label" Content="{TemplateBinding Content}"
                                           Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" />
-                        <Border Name="Underline" Height="2" CornerRadius="1" Background="{StaticResource GoldBrush}"
+                        <Border Name="Underline" Height="2" CornerRadius="1" Background="{StaticResource FrameBrush}"
                                 RenderTransform="scaleX(0)">
                             <Border.Transitions>
                                 <Transitions>
@@ -42,16 +42,16 @@
             </Setter>
         </Style>
         <Style Selector="Button.nav:pointerover">
-            <Setter Property="Foreground" Value="#FFF4D2" />
+            <Setter Property="Foreground" Value="#FBF7E8" />
         </Style>
         <Style Selector="Button.nav:pointerover /template/ Border#Underline">
             <Setter Property="RenderTransform" Value="scaleX(1)" />
         </Style>
 
         <!-- Play button: Assets/play-button.png (270x96) that glows and grows slightly on hover.
-             The glow is the image's shape filled with orange and blurred, so it follows any art -->
+             The glow is the image's shape filled with teal and blurred, so it follows any art -->
         <Style Selector="Button.play">
-            <Setter Property="Foreground" Value="#F2E6CC" />
+            <Setter Property="Foreground" Value="#F4EDD6" />
             <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
             <Setter Property="FontSize" Value="26" />
             <Setter Property="FontWeight" Value="Bold" />
@@ -66,12 +66,12 @@
             <Setter Property="Template">
                 <ControlTemplate>
                     <Grid Width="270" Height="96">
-                        <Border Name="Glow" Margin="-6" Opacity="0" Background="#FF7A1F">
+                        <Border Name="Glow" Margin="-10" Opacity="0.18" Background="#7FD6BC">
                             <Border.OpacityMask>
                                 <ImageBrush Source="{x:Static views:LauncherArt.PlayButton}" Stretch="Fill" />
                             </Border.OpacityMask>
                             <Border.Effect>
-                                <BlurEffect Radius="18" />
+                                <BlurEffect Radius="28" />
                             </Border.Effect>
                             <Border.Transitions>
                                 <Transitions>
@@ -85,7 +85,7 @@
                             <ContentPresenter Name="Label" Content="{TemplateBinding Content}"
                                               Foreground="{TemplateBinding Foreground}">
                                 <ContentPresenter.Effect>
-                                    <DropShadowEffect Color="Black" BlurRadius="6" OffsetX="0" OffsetY="2" Opacity="0.9" />
+                                    <DropShadowEffect Color="Black" BlurRadius="10" OffsetX="0" OffsetY="2" Opacity="0.8" />
                                 </ContentPresenter.Effect>
                             </ContentPresenter>
                         </Viewbox>
@@ -97,7 +97,7 @@
             <Setter Property="RenderTransform" Value="scale(1.05)" />
         </Style>
         <Style Selector="Button.play:pointerover /template/ Border#Glow">
-            <Setter Property="Opacity" Value="0.75" />
+            <Setter Property="Opacity" Value="0.5" />
         </Style>
         <Style Selector="Button.play:pressed">
             <Setter Property="RenderTransform" Value="scale(0.98)" />
@@ -134,13 +134,14 @@
         </Style>
         <Style Selector="TextBlock.barText">
             <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="{x:Static config:LauncherConfig.DefaultTextColor}" />
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
             <Setter Property="Margin" Value="16,0" />
             <Setter Property="Effect">
-                <DropShadowEffect Color="Black" BlurRadius="3" OffsetX="0" OffsetY="1" Opacity="1" />
+                <DropShadowEffect Color="{x:Static config:LauncherConfig.ProgressTextOutline}" BlurRadius="5" OffsetX="0" OffsetY="0" Opacity="1" />
             </Setter>
         </Style>
     </Window.Styles>
@@ -168,7 +169,7 @@
                 </LinearGradientBrush>
             </Border.Background>
         </Border>
-        <Border IsHitTestVisible="False" BorderBrush="#3A2E1F" BorderThickness="2" />
+        <Border IsHitTestVisible="False" BorderBrush="#2E2748" BorderThickness="2" />
 
         <Grid RowDefinitions="Auto,*,Auto">
             <!-- Top bar: links centered, window buttons on the right -->
@@ -189,14 +190,14 @@
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top"
                             Margin="0,8,8,0" Spacing="4">
                     <Button Classes="chrome settings" Click="Settings_Click" ToolTip.Tip="Settings">
-                        <Path Width="20" Height="20" Stretch="Uniform" Fill="#E8D6B0"
+                        <Path Width="20" Height="20" Stretch="Uniform" Fill="#E4ECE6"
                               Data="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z" />
                     </Button>
                     <Button Classes="chrome minimize" Click="Minimize_Click" ToolTip.Tip="Minimize">
-                        <Border Width="14" Height="3" Background="#E8D6B0" CornerRadius="1" />
+                        <Border Width="14" Height="3" Background="#E4ECE6" CornerRadius="1" />
                     </Button>
                     <Button Classes="chrome close" Click="Close_Click" ToolTip.Tip="Close">
-                        <Path Data="M 0,0 L 14,14 M 14,0 L 0,14" Stroke="#E8D6B0" StrokeThickness="2.5" />
+                        <Path Data="M 0,0 L 14,14 M 14,0 L 0,14" Stroke="#E4ECE6" StrokeThickness="2.5" />
                     </Button>
                 </StackPanel>
             </Grid>
@@ -207,7 +208,7 @@
                            FontSize="92" FontWeight="Bold" LetterSpacing="4"
                            HorizontalAlignment="Center" Foreground="{Binding TitleColor}">
                     <TextBlock.Effect>
-                        <DropShadowEffect Color="#FF8A2A" BlurRadius="28" OffsetX="0" OffsetY="0" Opacity="0.85" />
+                        <DropShadowEffect Color="#7FD6BC" BlurRadius="28" OffsetX="0" OffsetY="0" Opacity="0.85" />
                     </TextBlock.Effect>
                 </TextBlock>
                 <TextBlock Text="{Binding Subtitle}" FontFamily="{StaticResource DisplayFont}" FontSize="17"
@@ -251,7 +252,7 @@
                                 IsVisible="{Binding RetryReady}" MinWidth="0" Padding="12,2" FontSize="12" Margin="8,0,0,0" />
                         <Button Grid.Column="2" Classes="chrome close" Width="22" Height="22" Click="Cancel_Click"
                                 IsVisible="{Binding IsUpdating}" ToolTip.Tip="Cancel update">
-                            <Path Data="M 0,0 L 8,8 M 8,0 L 0,8" Stroke="#E8D6B0" StrokeThickness="1.5" />
+                            <Path Data="M 0,0 L 8,8 M 8,0 L 0,8" Stroke="#E4ECE6" StrokeThickness="1.5" />
                         </Button>
                     </Grid>
 

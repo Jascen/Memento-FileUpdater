@@ -4,12 +4,12 @@
         Width="440" SizeToContent="Height" CanResize="False"
         SystemDecorations="None" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Background="Transparent" TransparencyLevelHint="Transparent">
-    <Border Background="#F01A1512" BorderBrush="{StaticResource GoldBrush}" BorderThickness="3" CornerRadius="6"
+    <Border Background="#F0161228" BorderBrush="{StaticResource FrameBrush}" BorderThickness="3" CornerRadius="6"
             Padding="24,20">
         <StackPanel Spacing="16">
             <TextBlock Name="TitleText" FontFamily="{StaticResource DisplayFont}" FontSize="22" FontWeight="Bold"
-                       Foreground="#F3D58A" />
-            <TextBlock Name="MessageText" TextWrapping="Wrap" FontSize="14" Foreground="#E8DCC0" LineHeight="20" />
+                       Foreground="#F4EDD6" />
+            <TextBlock Name="MessageText" TextWrapping="Wrap" FontSize="14" Foreground="#DCE6DE" LineHeight="20" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,6,0,0">
                 <Button Name="CancelButton" Classes="dialog secondary" Click="Cancel_Click" IsCancel="True" />
                 <Button Name="ConfirmButton" Classes="dialog" Click="Confirm_Click" IsDefault="True" />
