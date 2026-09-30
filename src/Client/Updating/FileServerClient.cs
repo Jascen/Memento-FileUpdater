@@ -100,7 +100,7 @@ public class FileServerClient
         CancellationToken cancellationToken)
     {
         //The name comes from a signed manifest, but it is still only ever a plain file name
-        if (package.File != Path.GetFileName(package.File))
+        if (!PackageFileName.IsPlain(package.File))
             throw new InvalidDataException($"[{package.File}] is not a plain file name");
 
         return DownloadAsync(PackageUrl("file/" + Uri.EscapeDataString(package.File)), package.File, package.Size,

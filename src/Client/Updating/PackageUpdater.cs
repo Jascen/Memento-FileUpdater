@@ -164,6 +164,13 @@ public class PackageUpdater(FileServerClient server, LocalFiles localFiles, IRea
     private async Task<string?> DownloadAsync(PackageEntry package, UpdatePhase phase, Action<UpdateProgress> progress,
         CancellationToken cancellationToken)
     {
+        //Checked before any folder is created: the name comes from a signed manifest but is only ever a plain file name
+        if (!PackageFileName.IsPlain(package.File))
+        {
+            Console.WriteLine($"[{package.File}] is not a plain file name, skipping..");
+            return null;
+        }
+
         var path = Path.Combine(downloadFolder, package.File);
         var clock = Stopwatch.StartNew();
         var lastReport = TimeSpan.Zero;

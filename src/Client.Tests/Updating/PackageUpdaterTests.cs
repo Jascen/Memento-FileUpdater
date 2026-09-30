@@ -313,6 +313,26 @@ public class PackageUpdaterTests : IDisposable
         Assert.Equal([new UpdateErrorInfo(UpdateError.SelfUpdateFailed)], _errors);
     }
 
+    [Theory]
+    [InlineData("..\\evil.zip")]
+    [InlineData("../evil.zip")]
+    [InlineData("sub/client-2.0.0.win-x64.zip")]
+    public async Task ApplyNeverDownloadsAPackageWhoseNameIsNotAPlainFileName(string file)
+    {
+        //Arrange
+        var updater = CreateUpdater();
+        var package = new PackageEntry(PackageRole.Client, "2.0.0", Rid, file, "abc", 1);
+
+        //Act
+        await Apply(updater, new PackageUpdates(null, package, ManifestMissing: false));
+
+        //Assert
+        Assert.Empty(_server.PackageDownloads);
+        Assert.False(_client.IsInstalled);
+        Assert.False(_fileSystem.Directory.Exists(Downloads)); //Nothing was created, not even the download folder
+        Assert.Equal([new UpdateErrorInfo(UpdateError.LauncherFailed)], _errors);
+    }
+
     [Fact]
     public async Task ApplyReportsAMissingClientWhenTheServerHasNothingToInstallItFrom()
     {

@@ -57,5 +57,9 @@ public static partial class PackageFileName
         return true;
     }
 
+    //True for a bare file name: no folders, on any platform, so it can never point outside the folder it is joined to
+    public static bool IsPlain(string fileName) =>
+        fileName.Length > 0 && fileName is not ("." or "..") && fileName.IndexOfAny(['/', '\\', '\0']) < 0;
+
     public static string Format(string role, string version, string rid) => $"{role}-{version}.{rid}.zip";
 }

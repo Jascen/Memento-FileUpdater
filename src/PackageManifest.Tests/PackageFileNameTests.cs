@@ -19,6 +19,24 @@ public class PackageFileNameTests
     }
 
     [Theory]
+    [InlineData("launcher-1.2.0.win-x64.zip", true)]
+    [InlineData("anything.zip", true)]
+    [InlineData("", false)]
+    [InlineData(".", false)]
+    [InlineData("..", false)]
+    [InlineData("../x.zip", false)]
+    [InlineData("..\\x.zip", false)] //A backslash counts everywhere, not just on Windows
+    [InlineData("sub/x.zip", false)]
+    public void IsPlainOnlyAcceptsBareFileNames(string fileName, bool plain)
+    {
+        //Act
+        var result = PackageFileName.IsPlain(fileName);
+
+        //Assert
+        Assert.Equal(plain, result);
+    }
+
+    [Theory]
     [InlineData("launcher.win-x64.zip")] //No version
     [InlineData("launcher-1.win-x64.zip")] //One-part version
     [InlineData("game-1.2.0.win-x64.zip")] //Unknown role
