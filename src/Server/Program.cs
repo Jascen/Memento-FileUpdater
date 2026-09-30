@@ -1,3 +1,4 @@
+using FileUpdaterPackages;
 using FileUpdaterServer;
 using Microsoft.AspNetCore.ResponseCompression;
 
@@ -12,6 +13,10 @@ var exeDirectory = AppContext.BaseDirectory;
 if (!Path.IsPathRooted(settings.FilesDirectory))
 {
     settings.FilesDirectory = Path.GetFullPath(Path.Combine(exeDirectory, settings.FilesDirectory));
+}
+if (!Path.IsPathRooted(settings.PackagesDirectory))
+{
+    settings.PackagesDirectory = Path.GetFullPath(Path.Combine(exeDirectory, settings.PackagesDirectory));
 }
 if (!Path.IsPathRooted(settings.CacheFileName))
 {
@@ -94,6 +99,7 @@ var app = builder.Build();
 
 // Ensure files directory exists
 Directory.CreateDirectory(settings.FilesDirectory);
+Directory.CreateDirectory(settings.PackagesDirectory);
 
 // Use middleware
 app.UseCors();
@@ -135,78 +141,43 @@ var downloadSemaphore = settings.MaxConcurrentDownloads > 0
     ? new SemaphoreSlim(settings.MaxConcurrentDownloads)
     : null;
 
-// File download middleware - handle /file/* requests
+var fileHandler = new FileRequestHandler(settings, downloadSemaphore,
+    app.Services.GetRequiredService<ILogger<FileRequestHandler>>());
+
+// File download middleware - handle /file/* requests (game files)
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path.StartsWithSegments("/file"))
+    if (context.Request.Path.StartsWithSegments("/file", out var remaining))
     {
-        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-        var path = context.Request.Path.Value?.Substring("/file/".Length) ?? "";
+        await fileHandler.HandleAsync(context, settings.FilesDirectory, remaining.Value?.TrimStart('/') ?? "");
+        return;
+    }
 
-        // Path traversal protection
-        if (settings.EnablePathTraversalProtection)
+    await next();
+});
+
+// Package middleware - handle /packages/* requests (launcher and client packages).
+// manifest.json and manifest.sig are made and signed offline by the PackageSigner tool, the server only hands them out
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/packages", out var remaining))
+    {
+        var name = remaining.Value?.TrimStart('/') ?? "";
+        if (name is PackageManifest.ManifestFileName or PackageManifest.SignatureFileName)
         {
-            if (path.Contains("..") || Path.IsPathRooted(path))
-            {
-                logger.LogWarning("Path traversal attempt blocked: {Path}", path);
-                context.Response.StatusCode = 404;
-                return;
-            }
+            //Always fetched fresh, a stale manifest would hide a new release
+            context.Response.Headers.CacheControl = "no-cache";
+            await fileHandler.HandleAsync(context, settings.PackagesDirectory, name,
+                name == PackageManifest.ManifestFileName ? "application/json" : "text/plain");
         }
-
-        var fullPath = Path.Combine(settings.FilesDirectory, path);
-        var normalizedPath = Path.GetFullPath(fullPath);
-        var normalizedFilesDir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(settings.FilesDirectory)) + Path.DirectorySeparatorChar;
-
-        if (!normalizedPath.StartsWith(normalizedFilesDir, StringComparison.OrdinalIgnoreCase))
+        else if (name.StartsWith("file/") && !name["file/".Length..].Contains('/'))
         {
-            logger.LogWarning("Path traversal attempt blocked: {Path} (normalized check)", path);
+            //Packages sit directly in the packages folder, no subfolders
+            await fileHandler.HandleAsync(context, settings.PackagesDirectory, name["file/".Length..]);
+        }
+        else
+        {
             context.Response.StatusCode = 404;
-            return;
-        }
-
-        if (!File.Exists(fullPath))
-        {
-            logger.LogDebug("File not found: {Path}", path);
-            context.Response.StatusCode = 404;
-            return;
-        }
-
-        // Check file size if limit is set
-        if (settings.MaxFileSize > 0)
-        {
-            var fileInfo = new FileInfo(fullPath);
-            if (fileInfo.Length > settings.MaxFileSize)
-            {
-                logger.LogWarning("File too large: {Path} ({Size} bytes)", path, fileInfo.Length);
-                context.Response.StatusCode = 413;
-                return;
-            }
-        }
-
-        // Wait for a free download slot if concurrent downloads are limited
-        if (downloadSemaphore != null)
-        {
-            try
-            {
-                await downloadSemaphore.WaitAsync(context.RequestAborted);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-        }
-
-        try
-        {
-            logger.LogDebug("Serving file: {Path}", path);
-            // Range processing lets clients resume partial downloads
-            await Results.File(normalizedPath, "application/octet-stream", enableRangeProcessing: true)
-                .ExecuteAsync(context);
-        }
-        finally
-        {
-            downloadSemaphore?.Release();
         }
         return;
     }
@@ -247,6 +218,7 @@ logger.LogInformation("========================================");
 logger.LogInformation("Port: {Port}", settings.Port);
 logger.LogInformation("Hostname: {Hostname}", string.IsNullOrEmpty(settings.Hostname) ? "All interfaces" : settings.Hostname);
 logger.LogInformation("Files directory: {Dir}", Path.GetFullPath(settings.FilesDirectory));
+logger.LogInformation("Packages directory: {Dir}", settings.PackagesDirectory);
 logger.LogInformation("Cache file: {Cache}", settings.CacheFileName);
 logger.LogInformation("Watch files directory: {Enabled}", settings.WatchFilesDirectory);
 logger.LogInformation("Cache interval: {Interval} seconds", settings.CacheRegenerationInterval);

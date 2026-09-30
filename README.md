@@ -78,6 +78,13 @@ The server is fully configurable via `settings.ini`:
 - **EnableCompression**: Enable gzip/brotli compression (default: true)
 - And more... see settings.ini for full configuration options 
 
+## Hosting the launcher and client packages
+The server can also host the launcher and client (TazUO) packages for players to download. These are programs players run, so they are signed:
+1. Generate a signing key once, on your own machine: `dotnet run --project src/PackageSigner -- keygen`. Keep `package-signing.key` private (it is git-ignored) and never put it on the server. The launcher will be built with the printed public key.
+2. Name your zips `{role}-{version}.{rid}.zip`, e.g. `launcher-1.2.0.win-x64.zip` and `client-3.4.0.win-x64.zip`, and put them in one folder.
+3. Sign: `dotnet run --project src/PackageSigner -- sign --packages <folder> --key package-signing.key`. This writes `manifest.json` and `manifest.sig` next to the zips.
+4. Upload the folder's contents to the server's `packages/` folder (`PackagesDirectory` in `settings.ini`). Players' launchers fetch `/packages/manifest.json` and only trust it if the signature matches.
+
 # Client Info
 - Players can put the launcher anywhere. Game files are downloaded into a `Client` folder next to it by default, and players can pick another folder in Settings (the cog button).
 - For example:

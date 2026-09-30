@@ -119,6 +119,10 @@ MaxConcurrentDownloads = 50
 # Created automatically if it doesn't exist
 FilesDirectory = ./files/
 
+# Directory holding the launcher and client packages and their signed manifest (relative or absolute path)
+# Created automatically if it doesn't exist. Fill it with the PackageSigner tool's output
+PackagesDirectory = ./packages/
+
 # Name of the JSON cache file
 CacheFileName = jsoncache.json
 
