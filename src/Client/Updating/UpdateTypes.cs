@@ -43,8 +43,8 @@ public enum UpdateResult
 {
     Finished, //Everything checked, downloaded and set up. See UpdateService.FilesVerified for whether any file failed
     UpdatesReady, //Files differ from the server, waiting for DownloadAsync
-    PackagesReady, //Files match but a launcher or client package is out of date or missing, waiting for DownloadAsync
-    Restarting, //The launcher replaced itself and is restarting, nothing more to do in this process
+    PackagesReady, //Files match but the TazUO launcher is out of date or missing, waiting for DownloadAsync
+    Restarting, //UpdateLauncherAsync: the launcher replaced itself and is restarting, nothing more to do in this process
     Failed, //Stopped by an error, see UpdateService.ErrorOccurred
     Cancelled,
 }

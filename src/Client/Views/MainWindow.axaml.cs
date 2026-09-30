@@ -1,4 +1,6 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using FileUpdaterClient.Config;
@@ -35,6 +37,9 @@ public partial class MainWindow : Window, IMainView
 
     public void OpenUrl(Uri uri) => _ = Launcher.LaunchUriAsync(uri);
 
+    public void ShutdownForRestart() =>
+        (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown();
+
     //Dims the launcher while a dialog is open
     private async Task<T> ShowModal<T>(Task<T> dialog)
     {
@@ -65,6 +70,10 @@ public partial class MainWindow : Window, IMainView
     private async void MainButton_Click(object? sender, RoutedEventArgs e) => await _viewModel.MainButtonAsync();
 
     private async void Settings_Click(object? sender, RoutedEventArgs e) => await _viewModel.OpenSettingsAsync();
+
+    private async void UpdateLauncher_Click(object? sender, RoutedEventArgs e) => await _viewModel.UpdateLauncherAsync();
+
+    private void DismissLauncherUpdate_Click(object? sender, RoutedEventArgs e) => _viewModel.DismissLauncherUpdate();
 
     private void Cancel_Click(object? sender, RoutedEventArgs e) => _viewModel.CancelUpdate();
 

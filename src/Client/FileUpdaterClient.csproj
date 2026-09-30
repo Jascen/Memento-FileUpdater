@@ -16,6 +16,7 @@
     <RuntimeIdentifiers>win-x64;linux-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
     <SelfContained>true</SelfContained>
     <LangVersion>default</LangVersion>
+    <DebugType>none</DebugType> <!-- The launcher package is a few files, a .pdb isn't worth shipping -->
   </PropertyGroup>
 
   <ItemGroup>

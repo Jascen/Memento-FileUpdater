@@ -24,6 +24,9 @@ public static class LauncherConfig
     //updates game files: it installs and runs nothing it downloaded, so the TazUO launcher can't be installed either
     public static readonly string[] TrustedPublicKeys = [];
 
+    //How often an open launcher looks for a newer version of itself. The check at launch always happens
+    public static readonly TimeSpan PackageCheckInterval = TimeSpan.FromHours(4);
+
     //Links shown along the top of the launcher, in order. Use NavLink.VerifyAction as the target to re-check all files instead of opening a url.
     public static readonly NavLink[] Links =
     [

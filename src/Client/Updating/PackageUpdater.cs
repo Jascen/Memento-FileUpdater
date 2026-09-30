@@ -9,7 +9,9 @@ public record PackageUpdates(PackageEntry? Launcher, PackageEntry? Client, bool 
 {
     public static readonly PackageUpdates None = new(null, null, false);
 
-    public bool Any => Launcher != null || Client != null;
+    //Whether the next download has a package to install. A newer launcher isn't counted: updating it is the player's choice
+    //(UpdateLauncherAsync) and never holds up downloading files or playing
+    public bool Any => Client != null;
 }
 
 //Keeps this launcher and the TazUO launcher up to date from the server's signed packages
@@ -18,9 +20,14 @@ public interface IPackageUpdater
     //Fetches the signed manifest and works out what is out of date. Throws UpdateServerException if it can't be trusted
     Task<PackageUpdates> CheckAsync(CancellationToken cancellationToken);
 
-    //Downloads and applies the updates: this launcher first, then the TazUO launcher. Problems are reported through error,
-    //not thrown. Returns true when the launcher replaced itself and is restarting, so nothing else should run in this process
-    Task<bool> ApplyAsync(PackageUpdates updates, Action<UpdateProgress> progress, Action<UpdateErrorInfo> error,
+    //Downloads and installs the TazUO launcher if it is out of date or missing, and sets up its profiles. Problems are
+    //reported through error, not thrown. Never touches this launcher: see UpdateLauncherAsync
+    Task ApplyAsync(PackageUpdates updates, Action<UpdateProgress> progress, Action<UpdateErrorInfo> error,
+        CancellationToken cancellationToken);
+
+    //Downloads a newer version of this launcher and replaces it. Problems are reported through error, not thrown.
+    //Returns true when the launcher replaced itself and is restarting, so nothing else should run in this process
+    Task<bool> UpdateLauncherAsync(PackageEntry launcher, Action<UpdateProgress> progress, Action<UpdateErrorInfo> error,
         CancellationToken cancellationToken);
 }
 
@@ -38,16 +45,6 @@ public interface ISelfUpdater
     //packagePath is the verified zip. Returns true once the swap is under way and the process is restarting.
     //Returns false when nothing was applied, and the launcher carries on with the old version
     Task<bool> ApplyAndRestartAsync(string packagePath, Version newVersion, CancellationToken cancellationToken);
-}
-
-//Placeholder until the real swap-and-restart is plugged in
-public class NotImplementedSelfUpdater : ISelfUpdater
-{
-    public Task<bool> ApplyAndRestartAsync(string packagePath, Version newVersion, CancellationToken cancellationToken)
-    {
-        Console.WriteLine($"Launcher {newVersion} was downloaded, but self-update isn't implemented yet. Carrying on with this version..");
-        return Task.FromResult(false);
-    }
 }
 
 //Which package versions this machine has installed. The TazUO launcher has no version file we can read, so we remember it
@@ -84,12 +81,10 @@ public class PackageUpdater(FileServerClient server, LocalFiles localFiles, IRea
         return new PackageUpdates(launcher, package, ManifestMissing: false);
     }
 
-    public async Task<bool> ApplyAsync(PackageUpdates updates, Action<UpdateProgress> progress, Action<UpdateErrorInfo> error,
+    public async Task ApplyAsync(PackageUpdates updates, Action<UpdateProgress> progress, Action<UpdateErrorInfo> error,
         CancellationToken cancellationToken)
     {
-        if (updates.Launcher != null && await UpdateLauncherAsync(updates.Launcher, progress, error, cancellationToken))
-            return true;
-        if (client == null) return false;
+        if (client == null) return;
 
         if (updates.Client != null)
         {
@@ -104,10 +99,9 @@ public class PackageUpdater(FileServerClient server, LocalFiles localFiles, IRea
 
         if (client.IsInstalled)
             client.EnsureProfiles();
-        return false;
     }
 
-    private async Task<bool> UpdateLauncherAsync(PackageEntry package, Action<UpdateProgress> progress, Action<UpdateErrorInfo> error,
+    public async Task<bool> UpdateLauncherAsync(PackageEntry package, Action<UpdateProgress> progress, Action<UpdateErrorInfo> error,
         CancellationToken cancellationToken)
     {
         var version = TryVersion(package)!;

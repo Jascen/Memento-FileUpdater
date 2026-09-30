@@ -28,6 +28,10 @@ public class MainViewModel : INotifyPropertyChanged
     private bool _isUpdating;
     private bool _filesVerified;
     private bool _launcherInstalled;
+    private bool _launcherUpdateAvailable;
+    private string _launcherUpdateText = string.Empty;
+    private string? _dismissedLauncherVersion; //A launcher version the player chose "Not now" for, hidden until the launcher restarts
+    private DispatcherTimer? _launcherCheckTimer;
     public event PropertyChangedEventHandler? PropertyChanged;
 
     //Where launcher and client packages are saved while they download
@@ -131,6 +135,22 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>True while a newer version of this launcher is available and hasn't been dismissed. Purely optional to act on.</summary>
+    public bool LauncherUpdateAvailable
+    {
+        get => _launcherUpdateAvailable;
+        private set => SetField(ref _launcherUpdateAvailable, value);
+    }
+
+    public string LauncherUpdateText
+    {
+        get => _launcherUpdateText;
+        private set => SetField(ref _launcherUpdateText, value);
+    }
+
+    public string UpdateLauncherText => Strings.UpdateLauncherButton;
+    public string DismissLauncherUpdateText => Strings.LauncherUpdateLater;
+
     public bool CanPlay => !IsUpdating && !DownloadsReady && LauncherInstalled;
 
     //The center button downloads pending updates first, then becomes the play button
@@ -156,6 +176,88 @@ public class MainViewModel : INotifyPropertyChanged
         await StartWithFolderAsync();
     }
 
+    //Now and then while the launcher is open, looks for a newer version of itself. Not while an update is running
+    private void StartLauncherChecks()
+    {
+        if (_launcherCheckTimer != null || LauncherConfig.TrustedPublicKeys.Length == 0) return;
+
+        _launcherCheckTimer = new DispatcherTimer { Interval = LauncherConfig.PackageCheckInterval };
+        _launcherCheckTimer.Tick += async (_, _) => await RefreshLauncherUpdateAsync();
+        _launcherCheckTimer.Start();
+    }
+
+    private async Task RefreshLauncherUpdateAsync()
+    {
+        var updates = _updates;
+        if (updates == null || IsUpdating) return;
+
+        await updates.RefreshLauncherUpdateAsync();
+        if (updates == _updates && !IsUpdating) ShowLauncherUpdate();
+    }
+
+    private void ShowLauncherUpdate()
+    {
+        var version = _updates?.LauncherUpdate?.Version;
+        LauncherUpdateAvailable = version != null && version != _dismissedLauncherVersion;
+        if (version != null)
+            LauncherUpdateText = string.Format(Strings.LauncherUpdateAvailable, version);
+    }
+
+    public void DismissLauncherUpdate()
+    {
+        _dismissedLauncherVersion = _updates?.LauncherUpdate?.Version;
+        LauncherUpdateAvailable = false;
+    }
+
+    //Downloads the newer launcher and restarts into it. The player asked for this, so it only ever happens on a click
+    public async Task UpdateLauncherAsync()
+    {
+        var updates = _updates;
+        if (updates == null || _view == null) return;
+
+        if (IsUpdating)
+        {
+            if (!await _view.ConfirmAsync(Strings.LauncherUpdateBusyTitle, Strings.LauncherUpdateBusyMessage,
+                    Strings.LauncherUpdateBusyConfirm, Strings.CancelText))
+                return;
+
+            CancelUpdate();
+            for (var waited = 0; IsUpdating && waited < 100; waited++) //The cancelled run ends shortly
+                await Task.Delay(100);
+            if (IsUpdating || updates != _updates) return;
+        }
+
+        var previousText = ProgressText;
+        var wasReady = DownloadsReady;
+        IsUpdating = true;
+        DownloadsReady = false; //Hides the download button while the launcher update owns the progress bar
+        RetryReady = false;
+        ErrorMessage = string.Empty;
+        Progress = 0;
+        FileProgress = 0;
+        FileProgressText = string.Empty;
+
+        var result = await updates.UpdateLauncherAsync();
+        if (updates != _updates) return;
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            if (result == UpdateResult.Restarting)
+            {
+                ProgressText = Strings.Restarting;
+                _view.ShutdownForRestart(); //The updater is waiting for this process to end
+                return;
+            }
+
+            //Not applied (or cancelled): carry on with this version as before. A failure already set the error message
+            ProgressText = previousText;
+            DownloadsReady = wasReady;
+            Progress = 0;
+            IsUpdating = false;
+            ShowLauncherUpdate();
+        });
+    }
+
     private async Task StartWithFolderAsync()
     {
         var installPath = InstallLocation.Path;
@@ -165,7 +267,7 @@ public class MainViewModel : INotifyPropertyChanged
         //Without a trusted signing key nothing the server hosts as a package is ever installed
         var packages = LauncherConfig.TrustedPublicKeys.Length == 0 ? null
             : new PackageUpdater(server, localFiles, LauncherConfig.TrustedPublicKeys, PlatformId.Current, LauncherVersion.Current,
-                PackageDownloadFolder, new NotImplementedSelfUpdater(), _launcher, new PackageState());
+                PackageDownloadFolder, new SelfUpdater(), _launcher, new PackageState());
         var updates = new UpdateService(server, localFiles, installPath, packages, LauncherConfig.KeepLocalFiles);
         //A service that has been replaced (the folder changed) may still be winding down, so its updates are ignored
         updates.ProgressChanged += progress => Dispatcher.UIThread.Post(() => { if (updates == _updates) ShowProgress(progress); });
@@ -186,10 +288,16 @@ public class MainViewModel : INotifyPropertyChanged
         if (packages == null && TazUOLauncherConfig.Enabled)
             ErrorMessage = Strings.PackagesNotConfigured;
 
+        StartLauncherChecks();
         if (Preferences.Current.VerifyOnLaunch)
+        {
             await CheckForUpdatesAsync();
+        }
         else
+        {
             ProgressText = Strings.NotVerified;
+            await RefreshLauncherUpdateAsync();
+        }
     }
 
     public async Task<UpdateResult?> CheckForUpdatesAsync()
@@ -384,6 +492,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         LauncherInstalled = _launcher?.IsInstalled ?? false;
         IsUpdating = false;
+        ShowLauncherUpdate();
     }
 
     protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)

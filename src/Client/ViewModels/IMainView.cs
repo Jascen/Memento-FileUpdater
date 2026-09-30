@@ -9,4 +9,7 @@ public interface IMainView
     Task<bool> ConfirmAsync(string title, string message, string confirmText, string cancelText);
 
     void OpenUrl(Uri uri);
+
+    //Closes the launcher so the new version, started by the updater, can take over
+    void ShutdownForRestart();
 }
