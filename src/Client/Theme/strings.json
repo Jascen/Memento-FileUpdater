@@ -11,6 +11,7 @@
   "CheckingForUpdates": "Checking for updates..",
   "Finished": "Done, you're all up to date!",
   "FinishedWithFailures": "Finished, but {0} file(s) couldn't be downloaded.", // {0} = number of files
+  "FinishedNoClient": "Files are up to date, but the game client isn't available from the server yet.", // Check finished but there's no TazUO launcher to play with
   "CheckFailed": "Couldn't check for updates.",
   "RetryText": "Retry",
   "ReqFileList": "Requesting file list from server..",

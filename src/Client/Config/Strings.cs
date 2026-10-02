@@ -18,6 +18,7 @@ public static class Strings
     public static string CheckingForUpdates => Get();
     public static string Finished => Get();
     public static string FinishedWithFailures => Get();
+    public static string FinishedNoClient => Get();
     public static string CheckFailed => Get();
     public static string RetryText => Get();
     public static string ReqFileList => Get();

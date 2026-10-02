@@ -472,7 +472,9 @@ public class MainViewModel : INotifyPropertyChanged
                 FilesVerified = _updates?.FilesVerified ?? false;
                 Progress = 100;
                 FileProgress = 100;
-                ProgressText = failed > 0 ? string.Format(Strings.FinishedWithFailures, failed) : Strings.Finished;
+                ProgressText = failed > 0 ? string.Format(Strings.FinishedWithFailures, failed)
+                    : _launcher is { IsInstalled: false } ? Strings.FinishedNoClient //Nothing to play yet, so don't claim all is well
+                    : Strings.Finished;
                 FileProgressText = string.Empty;
                 RetryReady = failed > 0;
                 break;
