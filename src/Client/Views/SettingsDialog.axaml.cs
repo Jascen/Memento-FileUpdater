@@ -20,6 +20,7 @@ public partial class SettingsDialog : Window
         {
             VerifyOnLaunch = Preferences.Current.VerifyOnLaunch,
             WarnIfNotVerified = Preferences.Current.WarnIfNotVerified,
+            AllowInsecureDownloads = Preferences.Current.AllowInsecureDownloads,
         };
         InstallPathText.Text = _installFolder;
         ChangeFolderButton.Content = Strings.ChangeFolder;

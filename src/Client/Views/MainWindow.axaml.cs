@@ -13,7 +13,7 @@ public partial class MainWindow : Window, IMainView
 {
     private readonly MainViewModel _viewModel;
 
-    public MainWindow() : this(new MainViewModel()) //For the XAML previewer
+    public MainWindow() : this(App.CreateViewModel()) //For the XAML previewer
     {
     }
 

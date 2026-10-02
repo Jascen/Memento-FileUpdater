@@ -7,6 +7,8 @@ public class FileRequestHandlerTests
     [Theory]
     [InlineData("map0.mul")]
     [InlineData("maps/map1.mul")]
+    [InlineData("notes..txt")] //Dots inside a name aren't a parent folder
+    [InlineData("maps/..hidden")]
     public void ResolvesFilesInsideTheRoot(string relativePath)
     {
         //Act

@@ -39,6 +39,7 @@ public static class Strings
     public const string SelfUpdateError = "Couldn't update the launcher, it will be retried next time.";
     public const string PackagesUntrustedError = "The server's launcher updates couldn't be verified, so they were not installed.";
     public const string PackagesNotConfigured = "This launcher has no signing key set up, so it can't install the TazUO launcher.";
+    public const string InsecureServerError = "This launcher's update address isn't secure (https), so nothing was downloaded. You can allow it in Settings.";
     public const string FileFailedError = "Failed to download [{0}] after several attempts, skipping.."; //{0} = file name
     public const string FileLockedError = "[{0}] is in use. Close the game and click Retry to finish updating."; //{0} = file name
     public const string LaunchError = "Unable to start the TazUO launcher."; //Play button couldn't start it

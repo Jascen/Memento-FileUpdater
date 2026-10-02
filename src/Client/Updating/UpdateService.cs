@@ -1,4 +1,3 @@
-using FileUpdaterPackages;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Enumeration;
@@ -19,6 +18,7 @@ public class UpdateService
     private readonly string _installPath;
     private readonly IPackageUpdater? _packages;
     private readonly IReadOnlyCollection<string> _keepLocalFiles;
+    private readonly IReadOnlyCollection<string> _reservedPaths;
     private readonly HashCache _hashes;
 
     private readonly ConcurrentQueue<FileEntry> _toCompare = new();
@@ -53,68 +53,22 @@ public class UpdateService
     public IReadOnlyCollection<string> FailedFiles => _failedFiles.ToArray();
 
     //packages is null when the server hosts no packages for this launcher (no trusted signing key), so only files are updated.
-    //keepLocalFiles are name patterns (e.g. "*.cfg") for files players change themselves: downloaded only when missing, never replaced
+    //keepLocalFiles are name patterns (e.g. "*.cfg") for files players change themselves: downloaded only when missing, never replaced.
+    //reservedPaths are files or folders inside the install folder that the file list may never write to, like the folder
+    //a signed package is installed into: the file list isn't signed, so it must not be a way around the signature
     public UpdateService(FileServerClient server, LocalFiles localFiles, string installPath, IPackageUpdater? packages,
-        IReadOnlyCollection<string>? keepLocalFiles = null)
+        IReadOnlyCollection<string>? keepLocalFiles = null, IReadOnlyCollection<string>? reservedPaths = null)
     {
         _server = server;
         _localFiles = localFiles;
         _installPath = installPath;
         _packages = packages;
         _keepLocalFiles = keepLocalFiles ?? [];
+        _reservedPaths = [HashCache.FileName, .. reservedPaths ?? []];
         _hashes = new HashCache(localFiles, installPath);
     }
 
     public void Cancel() => _cancellation.Cancel();
-
-    //A newer version of this launcher found by the last check or refresh, or null. It never holds anything else up:
-    //the player decides when to apply it with UpdateLauncherAsync
-    public PackageEntry? LauncherUpdate => _packageUpdates.Launcher;
-
-    //Looks at the server's signed manifest again for a newer launcher, without comparing any files.
-    //Meant for checking now and then while the launcher stays open, so failures are only logged
-    public async Task RefreshLauncherUpdateAsync()
-    {
-        if (_packages == null) return;
-
-        try
-        {
-            var found = await _packages.CheckAsync(CancellationToken.None);
-            _packageUpdates = _packageUpdates with { Launcher = found.Launcher };
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine($"Couldn't check for a launcher update: {e.Message}");
-        }
-    }
-
-    //Downloads the launcher update found by the last check and replaces this launcher with it.
-    //Finished means there was nothing to do, Restarting that the new launcher is taking over, Failed that the update
-    //couldn't be applied (ErrorOccurred says why) and this launcher carries on
-    public async Task<UpdateResult> UpdateLauncherAsync()
-    {
-        var launcher = _packageUpdates.Launcher;
-        if (_packages == null || launcher == null) return UpdateResult.Finished;
-
-        if (_cancellation.IsCancellationRequested) _cancellation = new CancellationTokenSource();
-        var token = _cancellation.Token;
-        try
-        {
-            var restarting = await _packages.UpdateLauncherAsync(launcher, progress => ProgressChanged?.Invoke(progress),
-                error => ErrorOccurred?.Invoke(error), token);
-            return restarting ? UpdateResult.Restarting : UpdateResult.Failed;
-        }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
-        {
-            return UpdateResult.Cancelled;
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e.ToString());
-            ErrorOccurred?.Invoke(new UpdateErrorInfo(UpdateError.SelfUpdateFailed));
-            return UpdateResult.Failed;
-        }
-    }
 
     //Checks the server's file list against local files, stopping at the first difference. Nothing is downloaded here
     public Task<UpdateResult> CheckAsync() => RunAsync(async token =>
@@ -133,8 +87,7 @@ public class UpdateService
         return await Finish(token);
     });
 
-    //Installs the TazUO launcher if needed, then checks the files CheckAsync skipped and downloads everything that differs.
-    //A newer version of this launcher is not applied here, that is UpdateLauncherAsync
+    //Installs the TazUO launcher if needed, then checks the files CheckAsync skipped and downloads everything that differs
     public Task<UpdateResult> DownloadAsync() => RunAsync(async token =>
     {
         if (_needsFileList && !await LoadFileList(token)) return UpdateResult.Failed;
@@ -190,7 +143,15 @@ public class UpdateService
         try
         {
             foreach (var file in await _server.GetFileListAsync(_installPath, token))
+            {
+                if (LocalFiles.IsReserved(_installPath, file.Name, _reservedPaths))
+                {
+                    Console.WriteLine($"[{file.Name}] is not the file list's to update, skipping..");
+                    continue;
+                }
+
                 _toCompare.Enqueue(file);
+            }
         }
         catch (UpdateServerException e)
         {
@@ -245,7 +206,7 @@ public class UpdateService
         catch (Exception e) when (!token.IsCancellationRequested)
         {
             Console.WriteLine(e.ToString());
-            ErrorOccurred?.Invoke(new UpdateErrorInfo(UpdateError.LauncherFailed));
+            ErrorOccurred?.Invoke(new UpdateErrorInfo(UpdateError.TazUOInstallFailed));
         }
     }
 

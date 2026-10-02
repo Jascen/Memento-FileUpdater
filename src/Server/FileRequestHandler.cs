@@ -1,7 +1,7 @@
 namespace FileUpdaterServer;
 
 //Serves one file from a root directory: path checks, size limit, download slots and range requests.
-//Shared by /file (game files) and /packages (launcher and client packages), so both are limited the same way.
+//Shared by /file (game files) and /packages (launcher and TazUO packages), so both are limited the same way.
 public class FileRequestHandler(ServerSettings settings, SemaphoreSlim? downloadSlots, ILogger<FileRequestHandler> logger)
 {
     //Returns the full path when relativePath stays inside rootDirectory
@@ -9,7 +9,8 @@ public class FileRequestHandler(ServerSettings settings, SemaphoreSlim? download
     {
         fullPath = string.Empty;
 
-        if (traversalProtection && (relativePath.Contains("..") || Path.IsPathRooted(relativePath)))
+        //Only a whole ".." segment climbs out, a name like notes..txt is fine
+        if (traversalProtection && (relativePath.Split('/', '\\').Contains("..") || Path.IsPathRooted(relativePath)))
             return false;
 
         var combined = Path.GetFullPath(Path.Combine(rootDirectory, relativePath));

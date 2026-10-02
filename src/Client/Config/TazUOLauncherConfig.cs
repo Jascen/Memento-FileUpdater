@@ -1,7 +1,7 @@
 namespace FileUpdaterClient.Config;
 
 //Build-time configuration for the TazUO launcher: whether it's used, where it installs to, and the profiles it starts with.
-//It is installed from the client package the server hosts (see LauncherConfig.TrustedPublicKeys).
+//It is installed from the tazuo package the server hosts (see LauncherConfig.TrustedPublicKeys).
 //Its on-screen text lives in Strings.cs.
 public static class TazUOLauncherConfig
 {

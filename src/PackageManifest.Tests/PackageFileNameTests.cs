@@ -4,7 +4,7 @@ public class PackageFileNameTests
 {
     [Theory]
     [InlineData("launcher-1.2.0.win-x64.zip", "launcher", "1.2.0", "win-x64")]
-    [InlineData("client-3.4.0.1.linux-x64.zip", "client", "3.4.0.1", "linux-x64")]
+    [InlineData("tazuo-3.4.0.1.linux-x64.zip", "tazuo", "3.4.0.1", "linux-x64")]
     [InlineData("Launcher-10.0.osx-arm64.ZIP", "launcher", "10.0", "osx-arm64")]
     public void ParsesRoleVersionAndPlatform(string fileName, string role, string version, string rid)
     {

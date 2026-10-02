@@ -35,6 +35,62 @@ public class LocalFilesTests
         Assert.False(accepted);
     }
 
+    [Theory]
+    [InlineData("TazUO Launcher/TazUOLauncher.exe", true)]
+    [InlineData("TAZUO LAUNCHER/TazUOLauncher.exe", true)]
+    [InlineData("TazUO Launcher", true)]
+    [InlineData("maps/../TazUO Launcher/x.dll", true)]
+    [InlineData(".launcher-hashes.json", true)]
+    [InlineData("../outside.txt", true)] //Outside the install folder isn't the file list's either
+    [InlineData("TazUO Launcher Skins/skin.png", false)]
+    [InlineData("maps/TazUO Launcher/map0.mul", false)] //Only reserved at the top of the install folder
+    [InlineData("map0.mul", false)]
+    public void RecognizesReservedPaths(string name, bool expected)
+    {
+        //Act
+        var reserved = LocalFiles.IsReserved(Root, name, ["TazUO Launcher", ".launcher-hashes.json"]);
+
+        //Assert
+        Assert.Equal(expected, reserved);
+    }
+
+    [Theory]
+    [InlineData("TAZUOL~1/TazUOLauncher.exe", true)] //8.3 short name of "TazUO Launcher"
+    [InlineData("TA1F2C~1/x.dll", true)]
+    [InlineData("maps/MAPFIL~1.MUL", true)]
+    [InlineData("TazUO Launcher::$INDEX_ALLOCATION/x.dll", true)]
+    [InlineData("map0.mul:stream", true)]
+    [InlineData("map0.mul", false)]
+    [InlineData("maps/my~map.mul", false)]
+    [InlineData("backup~1234567.mul", false)]
+    public void RecognizesNamesWindowsOpensAsAnotherFile(string name, bool expected)
+    {
+        //Act
+        var alias = LocalFiles.IsWindowsAlias(name);
+
+        //Assert
+        Assert.Equal(expected, alias);
+    }
+
+    [Theory]
+    [InlineData("https://updates.example.com/", true)]
+    [InlineData("https://updates.example.com:8443/launcher", true)]
+    [InlineData("http://localhost:8080/", true)] //A server on this machine, for testing
+    [InlineData("http://127.0.0.1:8080/", true)]
+    [InlineData("http://[::1]:8080/", true)]
+    [InlineData("http://updates.example.com/", false)]
+    [InlineData("http://192.168.1.10:8080/", false)]
+    [InlineData("ftp://updates.example.com/", false)]
+    [InlineData("updates.example.com", false)]
+    public void OnlyHttpsOrThisMachineIsASecureServer(string url, bool expected)
+    {
+        //Act
+        var secure = FileServerClient.IsSecure(url);
+
+        //Assert
+        Assert.Equal(expected, secure);
+    }
+
     [Fact]
     public void ComputesLowercaseMd5()
     {

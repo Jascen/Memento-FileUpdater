@@ -35,14 +35,14 @@ public class ManifestBuilderTests
         AddFile("launcher-1.9.0.win-x64.zip", "old");
         AddFile("launcher-1.10.0.win-x64.zip", "new"); //Compared as versions, not text
         AddFile("launcher-0.5.0.linux-x64.zip", "other platform");
-        AddFile("client-3.0.0.win-x64.zip", "client");
+        AddFile("tazuo-3.0.0.win-x64.zip", "client");
 
         //Act
         var result = ManifestBuilder.Build(_fileSystem, Root, Now);
 
         //Assert
         Assert.Equal(
-            ["client 3.0.0 win-x64", "launcher 0.5.0 linux-x64", "launcher 1.10.0 win-x64"],
+            ["launcher 0.5.0 linux-x64", "launcher 1.10.0 win-x64", "tazuo 3.0.0 win-x64"],
             result.Manifest.Packages.Select(p => $"{p.Role} {p.Version} {p.Rid}"));
     }
 
@@ -71,7 +71,7 @@ public class ManifestBuilderTests
 
         //Act
         var found = manifest.Find(PackageRole.Launcher, "win-x64");
-        var missing = manifest.Find(PackageRole.Client, "win-x64");
+        var missing = manifest.Find(PackageRole.TazUO, "win-x64");
 
         //Assert
         Assert.Equal("1.0.0", found?.Version);
@@ -82,7 +82,7 @@ public class ManifestBuilderTests
     public void ManifestSurvivesAJsonRoundTrip()
     {
         //Arrange
-        AddFile("client-3.0.0.win-x64.zip", "client");
+        AddFile("tazuo-3.0.0.win-x64.zip", "client");
         var manifest = ManifestBuilder.Build(_fileSystem, Root, Now).Manifest;
 
         //Act

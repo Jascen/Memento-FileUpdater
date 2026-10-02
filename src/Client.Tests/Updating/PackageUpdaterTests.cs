@@ -9,44 +9,35 @@ namespace FileUpdaterClient.Tests.Updating;
 //Runs against an in-memory file system and fake server, so nothing touches the disk or network
 public class PackageUpdaterTests : IDisposable
 {
-    private const string Url = "http://updates.test/";
+    private const string Url = "https://updates.test/";
     private const string Rid = "win-x64";
-    private static readonly string InstallPath = MockUnixSupport.Path(@"C:\game");
     private static readonly string Downloads = MockUnixSupport.Path(@"C:\downloads");
 
     private readonly MockFileSystem _fileSystem = new();
     private readonly FakeServer _server = new();
     private readonly ECDsa _key = ManifestSigning.GenerateKey();
-    private readonly FakeClientInstaller _client;
-    private readonly FakeSelfUpdater _self;
+    private readonly FakeTazUOInstaller _tazUO;
     private readonly FakePackageState _state = new();
     private readonly List<UpdateProgress> _progress = new();
     private readonly List<UpdateErrorInfo> _errors = new();
 
     public PackageUpdaterTests()
     {
-        _client = new FakeClientInstaller { ReadZip = path => _fileSystem.File.ReadAllText(path) };
-        _self = new FakeSelfUpdater { ReadZip = path => _fileSystem.File.ReadAllText(path) };
+        _tazUO = new FakeTazUOInstaller { ReadZip = path => _fileSystem.File.ReadAllText(path) };
     }
 
     public void Dispose() => _key.Dispose();
 
-    private PackageUpdater CreateUpdater(string launcherVersion = "1.0.0", bool withClient = true, ECDsa? trustedKey = null)
+    private PackageUpdater CreateUpdater(bool withTazUO = true)
     {
         var localFiles = new LocalFiles(_fileSystem);
-        return new PackageUpdater(new FileServerClient(Url, localFiles, _server), localFiles,
-            [ManifestSigning.ExportPublicKey(trustedKey ?? _key)], Rid, Version.Parse(launcherVersion), Downloads, _self,
-            withClient ? _client : null, _state)
-        {
-            RetryDelay = _ => TimeSpan.Zero,
-        };
+        var server = new FileServerClient(Url, localFiles, _server);
+        var downloader = new PackageDownloader(server, localFiles, Downloads) { RetryDelay = _ => TimeSpan.Zero };
+        return new PackageUpdater(server, [ManifestSigning.ExportPublicKey(_key)], Rid, downloader, withTazUO ? _tazUO : null, _state);
     }
 
     private Task Apply(PackageUpdater updater, PackageUpdates updates) =>
         updater.ApplyAsync(updates, _progress.Add, _errors.Add, CancellationToken.None);
-
-    private Task<bool> UpdateLauncher(PackageUpdater updater, PackageUpdates updates) =>
-        updater.UpdateLauncherAsync(updates.Launcher!, _progress.Add, _errors.Add, CancellationToken.None);
 
     [Fact]
     public async Task CheckReportsNoManifestWhenTheServerHostsNoPackages()
@@ -67,7 +58,7 @@ public class PackageUpdaterTests : IDisposable
     {
         //Arrange
         using var attacker = ManifestSigning.GenerateKey();
-        _server.PublishPackages(attacker, (PackageRole.Client, "1.0.0", Rid, "evil"));
+        _server.PublishPackages(attacker, (PackageRole.TazUO, "1.0.0", Rid, "evil"));
         var updater = CreateUpdater();
 
         //Act
@@ -82,7 +73,7 @@ public class PackageUpdaterTests : IDisposable
     public async Task CheckRejectsAManifestChangedAfterSigning()
     {
         //Arrange
-        _server.PublishPackages(_key, (PackageRole.Client, "1.0.0", Rid, "client"));
+        _server.PublishPackages(_key, (PackageRole.TazUO, "1.0.0", Rid, "tazuo"));
         _server.Manifest = System.Text.Encoding.UTF8.GetBytes(System.Text.Encoding.UTF8.GetString(_server.Manifest!).Replace("1.0.0", "9.9.9"));
         var updater = CreateUpdater();
 
@@ -98,7 +89,7 @@ public class PackageUpdaterTests : IDisposable
     public async Task CheckRejectsAManifestWithoutASignature()
     {
         //Arrange
-        _server.PublishPackages(_key, (PackageRole.Client, "1.0.0", Rid, "client"));
+        _server.PublishPackages(_key, (PackageRole.TazUO, "1.0.0", Rid, "tazuo"));
         _server.Signature = null;
         var updater = CreateUpdater();
 
@@ -110,30 +101,27 @@ public class PackageUpdaterTests : IDisposable
         Assert.Equal(UpdateError.PackagesUntrusted, e.Error);
     }
 
-    [Theory]
-    [InlineData("1.0.0", "1.1.0", true)]
-    [InlineData("1.2", "1.2.1", true)]
-    [InlineData("1.2.0", "1.2", false)] //Same version written differently
-    [InlineData("1.1.0", "1.1.0", false)]
-    [InlineData("2.0.0", "1.9.0", false)] //Never offers a downgrade
-    public async Task CheckOffersALauncherOnlyWhenNewer(string running, string hosted, bool offered)
+    [Fact]
+    public async Task CheckStillRejectsAnUntrustedManifestWhenTheTazUOLauncherIsOff()
     {
         //Arrange
-        _server.PublishPackages(_key, (PackageRole.Launcher, hosted, Rid, "launcher"));
-        var updater = CreateUpdater(running);
+        using var attacker = ManifestSigning.GenerateKey();
+        _server.PublishPackages(attacker, (PackageRole.Launcher, "9.0.0", Rid, "evil"));
+        var updater = CreateUpdater(withTazUO: false);
 
         //Act
-        var updates = await updater.CheckAsync(CancellationToken.None);
+        var check = () => updater.CheckAsync(CancellationToken.None);
 
         //Assert
-        Assert.Equal(offered, updates.Launcher != null);
+        var e = await Assert.ThrowsAsync<UpdateServerException>(check);
+        Assert.Equal(UpdateError.PackagesUntrusted, e.Error);
     }
 
     [Fact]
     public async Task CheckIgnoresPackagesForOtherPlatforms()
     {
         //Arrange
-        _server.PublishPackages(_key, (PackageRole.Launcher, "9.0.0", "linux-x64", "launcher"), (PackageRole.Client, "9.0.0", "osx-arm64", "client"));
+        _server.PublishPackages(_key, (PackageRole.TazUO, "9.0.0", "osx-arm64", "tazuo"));
         var updater = CreateUpdater();
 
         //Act
@@ -144,46 +132,63 @@ public class PackageUpdaterTests : IDisposable
         Assert.False(updates.ManifestMissing);
     }
 
-    [Theory]
-    [InlineData(false, null, true)] //Not installed
-    [InlineData(true, null, true)] //Installed before versions were recorded
-    [InlineData(true, "1.0.0", true)] //Older
-    [InlineData(true, "2.0.0", false)] //Current
-    [InlineData(true, "3.0.0", false)] //Newer than the server, left alone
-    public async Task CheckOffersTheClientWhenMissingOrOlder(bool installed, string? recorded, bool offered)
+    [Fact]
+    public async Task CheckLeavesANewerLauncherToTheLauncherUpdater()
     {
         //Arrange
-        _server.PublishPackages(_key, (PackageRole.Client, "2.0.0", Rid, "client"));
-        _client.IsInstalled = installed;
-        _state.ClientVersion = recorded == null ? null : Version.Parse(recorded);
+        _tazUO.IsInstalled = true;
+        _state.TazUOVersion = new Version(2, 0, 0);
+        _server.PublishPackages(_key, (PackageRole.Launcher, "9.0.0", Rid, "launcher"), (PackageRole.TazUO, "2.0.0", Rid, "tazuo"));
         var updater = CreateUpdater();
 
         //Act
         var updates = await updater.CheckAsync(CancellationToken.None);
 
         //Assert
-        Assert.Equal(offered, updates.Client != null);
+        Assert.False(updates.Any); //Nothing the next download has to do
     }
 
-    [Fact]
-    public async Task CheckOffersNoClientWhenTheTazUOLauncherIsOff()
+    [Theory]
+    [InlineData(false, null, true)] //Not installed
+    [InlineData(true, null, true)] //Installed before versions were recorded
+    [InlineData(true, "1.0.0", true)] //Older
+    [InlineData(true, "2.0.0", false)] //Current
+    [InlineData(true, "2.0", false)] //Same version written differently
+    [InlineData(true, "3.0.0", false)] //Newer than the server, left alone
+    public async Task CheckOffersTazUOWhenMissingOrOlder(bool installed, string? recorded, bool offered)
     {
         //Arrange
-        _server.PublishPackages(_key, (PackageRole.Client, "2.0.0", Rid, "client"));
-        var updater = CreateUpdater(withClient: false);
+        _server.PublishPackages(_key, (PackageRole.TazUO, "2.0.0", Rid, "tazuo"));
+        _tazUO.IsInstalled = installed;
+        _state.TazUOVersion = recorded == null ? null : Version.Parse(recorded);
+        var updater = CreateUpdater();
 
         //Act
         var updates = await updater.CheckAsync(CancellationToken.None);
 
         //Assert
-        Assert.Null(updates.Client);
+        Assert.Equal(offered, updates.TazUO != null);
     }
 
     [Fact]
-    public async Task ApplyInstallsTheVerifiedClientAndRemembersItsVersion()
+    public async Task CheckOffersNothingWhenTheTazUOLauncherIsOff()
     {
         //Arrange
-        _server.PublishPackages(_key, (PackageRole.Client, "2.0.0", Rid, "client-bytes"));
+        _server.PublishPackages(_key, (PackageRole.TazUO, "2.0.0", Rid, "tazuo"));
+        var updater = CreateUpdater(withTazUO: false);
+
+        //Act
+        var updates = await updater.CheckAsync(CancellationToken.None);
+
+        //Assert
+        Assert.Null(updates.TazUO);
+    }
+
+    [Fact]
+    public async Task ApplyInstallsTheVerifiedPackageAndRemembersItsVersion()
+    {
+        //Arrange
+        _server.PublishPackages(_key, (PackageRole.TazUO, "2.0.0", Rid, "tazuo-bytes"));
         var updater = CreateUpdater();
         var updates = await updater.CheckAsync(CancellationToken.None);
 
@@ -191,12 +196,12 @@ public class PackageUpdaterTests : IDisposable
         await Apply(updater, updates);
 
         //Assert
-        Assert.Equal("client-bytes", _client.InstalledContent);
-        Assert.Equal(new Version(2, 0, 0), _state.ClientVersion);
-        Assert.Equal(1, _client.ProfileSetups);
-        Assert.False(_fileSystem.File.Exists(_client.InstalledFrom!)); //The downloaded zip is cleaned up
+        Assert.Equal("tazuo-bytes", _tazUO.InstalledContent);
+        Assert.Equal(new Version(2, 0, 0), _state.TazUOVersion);
+        Assert.Equal(1, _tazUO.ProfileSetups);
+        Assert.False(_fileSystem.File.Exists(_tazUO.InstalledFrom!)); //The downloaded zip is cleaned up
         Assert.Empty(_errors);
-        Assert.Equal(UpdatePhase.InstallingClient, _progress.Last().Phase);
+        Assert.Equal(UpdatePhase.InstallingTazUO, _progress.Last().Phase);
         Assert.Equal(1, _progress.Last().Done);
     }
 
@@ -204,8 +209,8 @@ public class PackageUpdaterTests : IDisposable
     public async Task ApplyRejectsAPackageThatDoesntMatchTheSignedHash()
     {
         //Arrange
-        _server.PublishPackages(_key, (PackageRole.Client, "2.0.0", Rid, "genuine"));
-        _server.TamperWithPackage(PackageRole.Client, "2.0.0", Rid, "malicious");
+        _server.PublishPackages(_key, (PackageRole.TazUO, "2.0.0", Rid, "genuine"));
+        _server.TamperWithPackage(PackageRole.TazUO, "2.0.0", Rid, "malicious");
         var updater = CreateUpdater();
         var updates = await updater.CheckAsync(CancellationToken.None);
 
@@ -213,10 +218,10 @@ public class PackageUpdaterTests : IDisposable
         await Apply(updater, updates);
 
         //Assert
-        Assert.False(_client.IsInstalled);
-        Assert.Null(_client.InstalledFrom);
-        Assert.Null(_state.ClientVersion);
-        Assert.Equal([new UpdateErrorInfo(UpdateError.LauncherFailed)], _errors);
+        Assert.False(_tazUO.IsInstalled);
+        Assert.Null(_tazUO.InstalledFrom);
+        Assert.Null(_state.TazUOVersion);
+        Assert.Equal([new UpdateErrorInfo(UpdateError.TazUOInstallFailed)], _errors);
         Assert.Equal(3, _server.PackageDownloads.Count); //Tried three times
         Assert.DoesNotContain(_fileSystem.AllFiles, f => f.StartsWith(Downloads)); //Nothing left behind
     }
@@ -225,8 +230,8 @@ public class PackageUpdaterTests : IDisposable
     public async Task ApplyReportsAFailedInstallAndDoesntRecordTheVersion()
     {
         //Arrange
-        _server.PublishPackages(_key, (PackageRole.Client, "2.0.0", Rid, "client"));
-        _client.InstallError = new IOException("locked");
+        _server.PublishPackages(_key, (PackageRole.TazUO, "2.0.0", Rid, "tazuo"));
+        _tazUO.InstallError = new IOException("locked");
         var updater = CreateUpdater();
         var updates = await updater.CheckAsync(CancellationToken.None);
 
@@ -234,143 +239,32 @@ public class PackageUpdaterTests : IDisposable
         await Apply(updater, updates);
 
         //Assert
-        Assert.Null(_state.ClientVersion);
-        Assert.Equal([new UpdateErrorInfo(UpdateError.LauncherFailed)], _errors);
-    }
-
-    [Fact]
-    public async Task UpdateLauncherPassesTheVerifiedPackageToTheSelfUpdater()
-    {
-        //Arrange
-        _server.PublishPackages(_key, (PackageRole.Launcher, "1.5.0", Rid, "launcher-bytes"), (PackageRole.Client, "2.0.0", Rid, "client"));
-        _self.Restarts = true;
-        var updater = CreateUpdater();
-        var updates = await updater.CheckAsync(CancellationToken.None);
-
-        //Act
-        var restarting = await UpdateLauncher(updater, updates);
-
-        //Assert
-        Assert.True(restarting);
-        Assert.Equal(new Version(1, 5, 0), Assert.Single(_self.Applied).Version);
-        Assert.Equal("launcher-bytes", _self.AppliedContent);
-        Assert.False(_client.IsInstalled); //The new launcher installs the client
-        Assert.Equal(UpdatePhase.UpdatingLauncher, _progress.Last().Phase);
-    }
-
-    [Fact]
-    public async Task ApplyLeavesTheLauncherAloneEvenWhenANewerOneIsHosted()
-    {
-        //Arrange
-        _server.PublishPackages(_key, (PackageRole.Launcher, "1.5.0", Rid, "launcher"), (PackageRole.Client, "2.0.0", Rid, "client"));
-        var updater = CreateUpdater();
-        var updates = await updater.CheckAsync(CancellationToken.None);
-
-        //Act
-        await Apply(updater, updates);
-
-        //Assert
-        Assert.Empty(_self.Applied);
-        Assert.True(_client.IsInstalled);
-        Assert.Empty(_errors);
-        Assert.DoesNotContain(_progress, p => p.Phase == UpdatePhase.UpdatingLauncher); //Never even downloaded
-    }
-
-    [Fact]
-    public async Task ALauncherUpdateAloneIsNotSomethingTheNextDownloadNeedsToDo()
-    {
-        //Arrange
-        _client.IsInstalled = true;
-        _state.ClientVersion = new Version(2, 0, 0);
-        _server.PublishPackages(_key, (PackageRole.Launcher, "1.5.0", Rid, "launcher"), (PackageRole.Client, "2.0.0", Rid, "client"));
-        var updater = CreateUpdater();
-
-        //Act
-        var updates = await updater.CheckAsync(CancellationToken.None);
-
-        //Assert
-        Assert.NotNull(updates.Launcher);
-        Assert.False(updates.Any);
-    }
-
-    [Fact]
-    public async Task UpdateLauncherCarriesOnWhenTheSelfUpdaterDeclines()
-    {
-        //Arrange
-        _server.PublishPackages(_key, (PackageRole.Launcher, "1.5.0", Rid, "launcher"));
-        var updater = CreateUpdater(); //_self.Restarts is false
-        var updates = await updater.CheckAsync(CancellationToken.None);
-
-        //Act
-        var restarting = await UpdateLauncher(updater, updates);
-        var next = await updater.CheckAsync(CancellationToken.None);
-
-        //Assert
-        Assert.False(restarting);
-        Assert.Empty(_errors);
-        Assert.Null(next.Launcher); //Not offered again this run
-        Assert.DoesNotContain(_fileSystem.AllFiles, f => f.StartsWith(Downloads));
-    }
-
-    [Fact]
-    public async Task UpdateLauncherReportsASelfUpdateFailure()
-    {
-        //Arrange
-        _server.PublishPackages(_key, (PackageRole.Launcher, "1.5.0", Rid, "launcher"));
-        _self.Error = new InvalidOperationException("swap failed");
-        var updater = CreateUpdater();
-        var updates = await updater.CheckAsync(CancellationToken.None);
-
-        //Act
-        var restarting = await UpdateLauncher(updater, updates);
-
-        //Assert
-        Assert.False(restarting);
-        Assert.Equal([new UpdateErrorInfo(UpdateError.SelfUpdateFailed)], _errors);
-    }
-
-    [Fact]
-    public async Task UpdateLauncherReportsAPackageThatCantBeVerifiedAndCanBeTriedAgain()
-    {
-        //Arrange
-        _server.PublishPackages(_key, (PackageRole.Launcher, "1.5.0", Rid, "launcher"));
-        _server.TamperWithPackage(PackageRole.Launcher, "1.5.0", Rid, "not what was signed");
-        var updater = CreateUpdater();
-        var updates = await updater.CheckAsync(CancellationToken.None);
-
-        //Act
-        var restarting = await UpdateLauncher(updater, updates);
-        var next = await updater.CheckAsync(CancellationToken.None);
-
-        //Assert
-        Assert.False(restarting);
-        Assert.Empty(_self.Applied); //Never handed an unverified package
-        Assert.Equal([new UpdateErrorInfo(UpdateError.SelfUpdateFailed)], _errors);
-        Assert.NotNull(next.Launcher); //Still offered, the download may just have been corrupted
+        Assert.Null(_state.TazUOVersion);
+        Assert.Equal([new UpdateErrorInfo(UpdateError.TazUOInstallFailed)], _errors);
     }
 
     [Theory]
     [InlineData("..\\evil.zip")]
     [InlineData("../evil.zip")]
-    [InlineData("sub/client-2.0.0.win-x64.zip")]
+    [InlineData("sub/tazuo-2.0.0.win-x64.zip")]
     public async Task ApplyNeverDownloadsAPackageWhoseNameIsNotAPlainFileName(string file)
     {
         //Arrange
         var updater = CreateUpdater();
-        var package = new PackageEntry(PackageRole.Client, "2.0.0", Rid, file, "abc", 1);
+        var package = new PackageEntry(PackageRole.TazUO, "2.0.0", Rid, file, "abc", 1);
 
         //Act
-        await Apply(updater, new PackageUpdates(null, package, ManifestMissing: false));
+        await Apply(updater, new PackageUpdates(package, ManifestMissing: false));
 
         //Assert
         Assert.Empty(_server.PackageDownloads);
-        Assert.False(_client.IsInstalled);
+        Assert.False(_tazUO.IsInstalled);
         Assert.False(_fileSystem.Directory.Exists(Downloads)); //Nothing was created, not even the download folder
-        Assert.Equal([new UpdateErrorInfo(UpdateError.LauncherFailed)], _errors);
+        Assert.Equal([new UpdateErrorInfo(UpdateError.TazUOInstallFailed)], _errors);
     }
 
     [Fact]
-    public async Task ApplyReportsAMissingClientWhenTheServerHasNothingToInstallItFrom()
+    public async Task ApplyReportsAMissingTazUOLauncherWhenTheServerHasNothingToInstallItFrom()
     {
         //Arrange
         var updater = CreateUpdater(); //No manifest at all
@@ -380,41 +274,40 @@ public class PackageUpdaterTests : IDisposable
         await Apply(updater, updates);
 
         //Assert
-        Assert.False(_client.IsInstalled);
-        Assert.Equal(0, _client.ProfileSetups);
-        Assert.Equal([new UpdateErrorInfo(UpdateError.LauncherFailed)], _errors);
+        Assert.False(_tazUO.IsInstalled);
+        Assert.Equal(0, _tazUO.ProfileSetups);
+        Assert.Equal([new UpdateErrorInfo(UpdateError.TazUOInstallFailed)], _errors);
     }
 
     [Fact]
-    public async Task ApplyKeepsAnInstalledClientsProfilesUpToDateWhenNothingIsPending()
+    public async Task ApplyKeepsAnInstalledTazUOLaunchersProfilesUpToDateWhenNothingIsPending()
     {
         //Arrange
-        _client.IsInstalled = true;
+        _tazUO.IsInstalled = true;
         var updater = CreateUpdater();
 
         //Act
         await Apply(updater, PackageUpdates.None);
 
         //Assert
-        Assert.Equal(1, _client.ProfileSetups);
+        Assert.Equal(1, _tazUO.ProfileSetups);
         Assert.Empty(_errors);
     }
 
     [Fact]
-    public async Task UpdateLauncherWorksWhenTheTazUOLauncherIsOff()
+    public async Task ApplyDoesNothingWhenTheTazUOLauncherIsOff()
     {
         //Arrange
-        _server.PublishPackages(_key, (PackageRole.Launcher, "1.5.0", Rid, "launcher"));
-        var updater = CreateUpdater(withClient: false);
+        _server.PublishPackages(_key, (PackageRole.TazUO, "2.0.0", Rid, "tazuo"));
+        var updater = CreateUpdater(withTazUO: false);
         var updates = await updater.CheckAsync(CancellationToken.None);
 
         //Act
-        await UpdateLauncher(updater, updates);
         await Apply(updater, updates);
 
         //Assert
-        Assert.Single(_self.Applied);
+        Assert.Empty(_server.PackageDownloads);
         Assert.Empty(_errors);
-        Assert.Equal(0, _client.ProfileSetups);
+        Assert.Equal(0, _tazUO.ProfileSetups);
     }
 }

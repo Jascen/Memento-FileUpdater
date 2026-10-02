@@ -3,7 +3,7 @@ using FileUpdaterClient.Updating;
 namespace FileUpdaterClient.Tests.Fakes;
 
 //Stands in for the TazUO launcher install: "installs" by recording which zip it was given
-public class FakeClientInstaller : IClientInstaller
+public class FakeTazUOInstaller : ITazUOInstaller
 {
     public bool IsInstalled { get; set; }
     public string? InstalledFrom { get; private set; }
@@ -45,7 +45,7 @@ public class FakeSelfUpdater : ISelfUpdater
 
 public class FakePackageState : IPackageState
 {
-    public Version? ClientVersion { get; set; }
+    public Version? TazUOVersion { get; set; }
 
-    public void SetClientVersion(Version version) => ClientVersion = version;
+    public void SetTazUOVersion(Version version) => TazUOVersion = version;
 }
