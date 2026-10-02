@@ -1,56 +1,92 @@
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+
 namespace FileUpdaterClient.Config;
 
-//Every message the player sees. Messages with {0}-style placeholders are filled in with string.Format.
+//Every message the player sees, read from Theme/strings.json (built into the exe). Messages with {0}-style placeholders are filled in with string.Format.
+//A message missing from the file shows its name instead, so a typo in the file is easy to spot
 public static class Strings
 {
-    public const string PlayText = "PLAY NOW"; //Center button, opens the TazUO launcher once it's installed
-    public const string DownloadButton = "Download updates"; //Center button while updates are waiting to download
+    private static readonly Dictionary<string, string> Messages = Load();
 
-    public const string CheckingForUpdates = "Checking for updates..";
-    public const string Finished = "Done, you're all up to date!";
-    public const string FinishedWithFailures = "Finished, but {0} file(s) couldn't be downloaded."; //{0} = number of files
-    public const string CheckFailed = "Couldn't check for updates.";
-    public const string RetryText = "Retry";
-    public const string ReqFileList = "Requesting file list from server..";
-    public const string ComparingFiles = "Comparing your files to the server.. ({0}/{1})"; //{0} = current file, {1} = total files
-    public const string InstallingTazUO = "Setting up the TazUO launcher..";
-    public const string UpdatesReady = "Updates are ready to download.";
-    public const string PackagesReady = "The TazUO launcher is ready to download.";
-    public const string UpdatingLauncher = "Updating the launcher..";
-    public const string DownloadingLauncher = "Downloading the launcher update.. {0} of {1}"; //{0} = downloaded, {1} = total size
-    public const string DownloadingTazUO = "Downloading the TazUO launcher.. {0} of {1}"; //{0} = downloaded, {1} = total size
-    public const string Restarting = "Restarting the launcher..";
-    public const string LauncherUpdateAvailable = "Launcher {0} is available"; //{0} = version. Shown beside the update button
-    public const string UpdateLauncherButton = "Update launcher";
-    public const string LauncherUpdateLater = "Not now";
-    public const string LauncherUpdateBusyTitle = "Update in progress";
-    public const string LauncherUpdateBusyMessage = "The launcher is still updating your files. Cancel that and update the launcher now?";
-    public const string LauncherUpdateBusyConfirm = "Cancel and update";
-    public const string DownloadingFiles = "Downloading files from the server.. ({0}/{1}) - ({2})"; //{0} = current file, {1} = total files, {2} dl speed
-    public const string DownloadingBytes = "Downloading.. {0} of {1} - {2}, {3} left"; //{0} = downloaded, {1} = total size, {2} = speed, {3} = time left. Used when the server sends file sizes
-    public const string CurrentFile = "{0}"; //{0} = file name, shown on the bottom (current file) bar
-    public const string Cancelled = "Update cancelled.";
-    public const string NotVerified = "Files not verified. Click Verify to check for updates."; //Shown when verifying on launch is turned off
+    public static string Title => Get();
+    public static string Subtitle => Get();
 
-    public const string ConError = "Unable to connect to server."; //Failed connection to server
-    public const string BadData = "Got bad data from server, please try again later."; //Malformed JSON response
-    public const string UnknownError = "An unknown error occured, please try again later.";
-    public const string TazUOError = "Couldn't set up the TazUO launcher, it will be retried next time.";
-    public const string SelfUpdateError = "Couldn't update the launcher, it will be retried next time.";
-    public const string PackagesUntrustedError = "The server's launcher updates couldn't be verified, so they were not installed.";
-    public const string PackagesNotConfigured = "This launcher has no signing key set up, so it can't install the TazUO launcher.";
-    public const string FileFailedError = "Failed to download [{0}] after several attempts, skipping.."; //{0} = file name
-    public const string FileLockedError = "[{0}] is in use. Close the game and click Retry to finish updating."; //{0} = file name
-    public const string LaunchError = "Unable to start the TazUO launcher."; //Play button couldn't start it
+    public static string PlayText => Get();
+    public static string DownloadButton => Get();
 
-    public const string ChooseFolderTitle = "Choose where to install UODiablo";
-    public const string NoFolderChosen = "Choose an install folder in Settings to continue.";
-    public const string FolderNotWritable = "Can't write to {0}, please choose another folder."; //{0} = folder
-    public const string ChangeFolder = "Change";
+    public static string CheckingForUpdates => Get();
+    public static string Finished => Get();
+    public static string FinishedWithFailures => Get();
+    public static string CheckFailed => Get();
+    public static string RetryText => Get();
+    public static string ReqFileList => Get();
+    public static string ComparingFiles => Get();
+    public static string InstallingTazUO => Get();
+    public static string UpdatesReady => Get();
+    public static string PackagesReady => Get();
+    public static string UpdatingLauncher => Get();
+    public static string DownloadingLauncher => Get();
+    public static string DownloadingTazUO => Get();
+    public static string Restarting => Get();
+    public static string LauncherUpdateAvailable => Get();
+    public static string UpdateLauncherButton => Get();
+    public static string LauncherUpdateLater => Get();
+    public static string LauncherUpdateBusyTitle => Get();
+    public static string LauncherUpdateBusyMessage => Get();
+    public static string LauncherUpdateBusyConfirm => Get();
+    public static string DownloadingFiles => Get();
+    public static string DownloadingBytes => Get();
+    public static string CurrentFile => Get();
+    public static string Cancelled => Get();
+    public static string NotVerified => Get();
 
-    //Popup when Play is clicked before the files were fully verified
-    public const string UnverifiedTitle = "Files not verified";
-    public const string UnverifiedMessage = "The status of your game files is unknown. They may be missing or out of date, which can cause problems in game.";
-    public const string PlayAnyway = "Play anyway";
-    public const string CancelText = "Cancel";
+    public static string ConError => Get();
+    public static string BadData => Get();
+    public static string UnknownError => Get();
+    public static string TazUOError => Get();
+    public static string SelfUpdateError => Get();
+    public static string PackagesUntrustedError => Get();
+    public static string PackagesNotConfigured => Get();
+    public static string FileFailedError => Get();
+    public static string FileLockedError => Get();
+    public static string LaunchError => Get();
+
+    public static string SettingsTooltip => Get();
+    public static string MinimizeTooltip => Get();
+    public static string CloseTooltip => Get();
+    public static string CancelUpdateTooltip => Get();
+
+    public static string SettingsTitle => Get();
+    public static string InstallFolderLabel => Get();
+    public static string ChooseFolderTitle => Get();
+    public static string NoFolderChosen => Get();
+    public static string FolderNotWritable => Get();
+    public static string ChangeFolder => Get();
+    public static string VerifyOnLaunchOption => Get();
+    public static string WarnIfNotVerifiedOption => Get();
+    public static string SaveText => Get();
+
+    public static string UnverifiedTitle => Get();
+    public static string UnverifiedMessage => Get();
+    public static string PlayAnyway => Get();
+    public static string CancelText => Get();
+
+    private static string Get([CallerMemberName] string name = "") => Messages.TryGetValue(name, out var text) ? text : name;
+
+    private static Dictionary<string, string> Load()
+    {
+        try
+        {
+            using var stream = typeof(Strings).Assembly.GetManifestResourceStream("Theme/strings.json");
+            if (stream != null)
+                return JsonSerializer.Deserialize<Dictionary<string, string>>(stream, ThemeJson.Options) ?? new();
+            Console.WriteLine("Theme/strings.json is missing from the build");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Failed to read Theme/strings.json: {e.Message}");
+        }
+        return new();
+    }
 }

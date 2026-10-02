@@ -1,0 +1,70 @@
+// Every message the player sees. Built into the exe, so rebuild after editing.
+// Messages with {0}-style placeholders are filled in by the launcher; keep the same placeholders when changing them.
+// A message missing from this file shows its name instead.
+{
+  "Title": "",
+  "Subtitle": "",
+
+  "PlayText": "PLAY NOW",                    // Center button, opens the TazUO launcher once it's installed
+  "DownloadButton": "Download updates",      // Center button while updates are waiting to download
+
+  "CheckingForUpdates": "Checking for updates..",
+  "Finished": "Done, you're all up to date!",
+  "FinishedWithFailures": "Finished, but {0} file(s) couldn't be downloaded.", // {0} = number of files
+  "CheckFailed": "Couldn't check for updates.",
+  "RetryText": "Retry",
+  "ReqFileList": "Requesting file list from server..",
+  "ComparingFiles": "Comparing your files to the server.. ({0}/{1})",           // {0} = current file, {1} = total files
+  "InstallingTazUO": "Setting up the TazUO launcher..",
+  "UpdatesReady": "Updates are ready to download.",
+  "PackagesReady": "The TazUO launcher is ready to download.",
+  "UpdatingLauncher": "Updating the launcher..",
+  "DownloadingLauncher": "Downloading the launcher update.. {0} of {1}",      // {0} = downloaded, {1} = total size
+  "DownloadingTazUO": "Downloading the TazUO launcher.. {0} of {1}",          // {0} = downloaded, {1} = total size
+  "Restarting": "Restarting the launcher..",
+  "LauncherUpdateAvailable": "Launcher {0} is available",                    // {0} = version. Shown beside the update button
+  "UpdateLauncherButton": "Update launcher",
+  "LauncherUpdateLater": "Not now",
+  "LauncherUpdateBusyTitle": "Update in progress",
+  "LauncherUpdateBusyMessage": "The launcher is still updating your files. Cancel that and update the launcher now?",
+  "LauncherUpdateBusyConfirm": "Cancel and update",
+  "DownloadingFiles": "Downloading files from the server.. ({0}/{1}) - ({2})", // {0} = current file, {1} = total files, {2} = speed
+  "DownloadingBytes": "Downloading.. {0} of {1} - {2}, {3} left",            // {0} = downloaded, {1} = total size, {2} = speed, {3} = time left. Used when the server sends file sizes
+  "CurrentFile": "{0}",                                                       // {0} = file name, shown on the bottom (current file) bar
+  "Cancelled": "Update cancelled.",
+  "NotVerified": "Files not verified. Click Verify to check for updates.",   // Shown when verifying on launch is turned off
+
+  "ConError": "Unable to connect to server.",
+  "BadData": "Got bad data from server, please try again later.",
+  "UnknownError": "An unknown error occured, please try again later.",
+  "TazUOError": "Couldn't set up the TazUO launcher, it will be retried next time.",
+  "SelfUpdateError": "Couldn't update the launcher, it will be retried next time.",
+  "PackagesUntrustedError": "The server's launcher updates couldn't be verified, so they were not installed.",
+  "PackagesNotConfigured": "This launcher has no signing key set up, so it can't install the TazUO launcher.",
+  "FileFailedError": "Failed to download [{0}] after several attempts, skipping..", // {0} = file name
+  "FileLockedError": "[{0}] is in use. Close the game and click Retry to finish updating.", // {0} = file name
+  "LaunchError": "Unable to start the TazUO launcher.",
+
+  // Window buttons along the top right and the cancel button beside the progress bars
+  "SettingsTooltip": "Settings",
+  "MinimizeTooltip": "Minimize",
+  "CloseTooltip": "Close",
+  "CancelUpdateTooltip": "Cancel update",
+
+  // Settings dialog
+  "SettingsTitle": "Settings",
+  "InstallFolderLabel": "Install Directory",
+  "ChooseFolderTitle": "Choose an install folder",
+  "NoFolderChosen": "Choose an install folder in Settings to continue.",
+  "FolderNotWritable": "Can't write to {0}, please choose another folder.",  // {0} = folder
+  "ChangeFolder": "Change",
+  "VerifyOnLaunchOption": "Attempt to verify files on launch",
+  "WarnIfNotVerifiedOption": "Warn when trying to play if verification fails",
+  "SaveText": "Save",
+
+  // Popup when Play is clicked before the files were fully verified
+  "UnverifiedTitle": "Files not verified",
+  "UnverifiedMessage": "The status of your game files is unknown. They may be missing or out of date, which can cause problems in game.",
+  "PlayAnyway": "Play anyway",
+  "CancelText": "Cancel"
+}

@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using FileUpdaterClient.Config;
 using FileUpdaterClient.ViewModels;
 using FileUpdaterClient.Views;
 
@@ -11,6 +12,7 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        ThemeLoader.Apply(Resources);
     }
 
     public override void OnFrameworkInitializationCompleted()

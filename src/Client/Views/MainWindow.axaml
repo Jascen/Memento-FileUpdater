@@ -6,7 +6,7 @@
         Width="900" Height="675" CanResize="False"
         SystemDecorations="None" WindowStartupLocation="CenterScreen"
         xmlns:vm="using:FileUpdaterClient.ViewModels"
-        xmlns:config="using:FileUpdaterClient.Config" xmlns:views="using:FileUpdaterClient.Views" Background="#0F0C1A" Icon="/Assets/icon.ico"
+        xmlns:config="using:FileUpdaterClient.Config" Background="{DynamicResource Theme.WindowBackground}" Icon="/Theme/icon.ico"
         x:Class="FileUpdaterClient.Views.MainWindow" x:DataType="vm:MainViewModel"
         PointerPressed="Window_PointerPressed">
 
@@ -14,9 +14,9 @@
         <!-- Top navigation links: brighten and grow a silver underline from the center on hover -->
         <Style Selector="Button.nav">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="#D6E4DA" />
-            <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
-            <Setter Property="FontSize" Value="17" />
+            <Setter Property="Foreground" Value="{DynamicResource Theme.NavText}" />
+            <Setter Property="FontFamily" Value="{DynamicResource Theme.DisplayFont}" />
+            <Setter Property="FontSize" Value="{DynamicResource Theme.NavFontSize}" />
             <Setter Property="Padding" Value="14,0" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Transitions">
@@ -29,7 +29,7 @@
                     <StackPanel Background="{TemplateBinding Background}" Margin="{TemplateBinding Padding}" Spacing="4">
                         <ContentPresenter Name="Label" Content="{TemplateBinding Content}"
                                           Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" />
-                        <Border Name="Underline" Height="2" CornerRadius="1" Background="{StaticResource FrameBrush}"
+                        <Border Name="Underline" Height="2" CornerRadius="1" Background="{DynamicResource Theme.Frame}"
                                 RenderTransform="scaleX(0)">
                             <Border.Transitions>
                                 <Transitions>
@@ -42,18 +42,18 @@
             </Setter>
         </Style>
         <Style Selector="Button.nav:pointerover">
-            <Setter Property="Foreground" Value="#FBF7E8" />
+            <Setter Property="Foreground" Value="{DynamicResource Theme.NavTextHover}" />
         </Style>
         <Style Selector="Button.nav:pointerover /template/ Border#Underline">
             <Setter Property="RenderTransform" Value="scaleX(1)" />
         </Style>
 
-        <!-- Play button: Assets/play-button.png (270x96) that glows and grows slightly on hover.
-             The glow is the image's shape filled with teal and blurred, so it follows any art -->
+        <!-- Play button: the PlayButtonImage (270x96) that glows and grows slightly on hover.
+             The glow is the image's shape filled with PlayGlow and blurred, so it follows any art -->
         <Style Selector="Button.play">
-            <Setter Property="Foreground" Value="#F4EDD6" />
-            <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
-            <Setter Property="FontSize" Value="26" />
+            <Setter Property="Foreground" Value="{DynamicResource Theme.PlayText}" />
+            <Setter Property="FontFamily" Value="{DynamicResource Theme.DisplayFont}" />
+            <Setter Property="FontSize" Value="{DynamicResource Theme.PlayFontSize}" />
             <Setter Property="FontWeight" Value="Bold" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="RenderTransform" Value="scale(1)" />
@@ -66,10 +66,8 @@
             <Setter Property="Template">
                 <ControlTemplate>
                     <Grid Width="270" Height="96">
-                        <Border Name="Glow" Margin="-10" Opacity="0.18" Background="#7FD6BC">
-                            <Border.OpacityMask>
-                                <ImageBrush Source="{x:Static views:LauncherArt.PlayButton}" Stretch="Fill" />
-                            </Border.OpacityMask>
+                        <Border Name="Glow" Margin="-10" Opacity="0.18" Background="{DynamicResource Theme.PlayGlow}"
+                                OpacityMask="{DynamicResource Theme.PlayButtonMask}">
                             <Border.Effect>
                                 <BlurEffect Radius="28" />
                             </Border.Effect>
@@ -79,15 +77,11 @@
                                 </Transitions>
                             </Border.Transitions>
                         </Border>
-                        <Image Source="{x:Static views:LauncherArt.PlayButton}" Stretch="Fill" />
+                        <Image Source="{DynamicResource Theme.PlayButtonImage}" Stretch="Fill" />
                         <!-- Shrinks longer labels (e.g. the download text) to fit inside the frame -->
                         <Viewbox StretchDirection="DownOnly" Margin="34,0" HorizontalAlignment="Center" VerticalAlignment="Center">
                             <ContentPresenter Name="Label" Content="{TemplateBinding Content}"
-                                              Foreground="{TemplateBinding Foreground}">
-                                <ContentPresenter.Effect>
-                                    <DropShadowEffect Color="Black" BlurRadius="10" OffsetX="0" OffsetY="2" Opacity="0.8" />
-                                </ContentPresenter.Effect>
-                            </ContentPresenter>
+                                              Foreground="{TemplateBinding Foreground}" Effect="{DynamicResource Theme.PlayTextShadow}" />
                         </Viewbox>
                     </Grid>
                 </ControlTemplate>
@@ -107,14 +101,14 @@
         </Style>
 
         <!-- Progress bars: the fill image is stretched to the full bar width and revealed from the left as progress grows.
-             Assets/progress-total.png (all files) and Assets/progress-file.png (current file), 508x22 -->
+             ProgressTotalImage (all files) and ProgressFileImage (current file), 508x22 -->
         <Style Selector="ProgressBar.bar">
             <Setter Property="Height" Value="22" />
             <Setter Property="MinHeight" Value="22" />
             <Setter Property="CornerRadius" Value="11" />
             <Setter Property="Minimum" Value="0" />
             <Setter Property="Maximum" Value="100" />
-            <Setter Property="Background" Value="{x:Static config:LauncherConfig.ProgressBarBackground}" />
+            <Setter Property="Background" Value="{DynamicResource Theme.ProgressTrack}" />
             <Setter Property="Template">
                 <ControlTemplate>
                     <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" ClipToBounds="True">
@@ -127,49 +121,31 @@
             </Setter>
         </Style>
         <Style Selector="ProgressBar.total /template/ Image#Fill">
-            <Setter Property="Source" Value="{x:Static views:LauncherArt.ProgressTotal}" />
+            <Setter Property="Source" Value="{DynamicResource Theme.ProgressTotalImage}" />
         </Style>
         <Style Selector="ProgressBar.file /template/ Image#Fill">
-            <Setter Property="Source" Value="{x:Static views:LauncherArt.ProgressFile}" />
+            <Setter Property="Source" Value="{DynamicResource Theme.ProgressFileImage}" />
         </Style>
         <Style Selector="TextBlock.barText">
             <Setter Property="FontSize" Value="12" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{x:Static config:LauncherConfig.DefaultTextColor}" />
+            <Setter Property="Foreground" Value="{DynamicResource Theme.ProgressText}" />
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
             <Setter Property="Margin" Value="16,0" />
-            <Setter Property="Effect">
-                <DropShadowEffect Color="{x:Static config:LauncherConfig.ProgressTextOutline}" BlurRadius="5" OffsetX="0" OffsetY="0" Opacity="1" />
-            </Setter>
+            <Setter Property="Effect" Value="{DynamicResource Theme.ProgressTextShadow}" />
         </Style>
     </Window.Styles>
 
     <Grid>
         <!-- Art -->
-        <Image Source="{x:Static views:LauncherArt.Background}" Stretch="UniformToFill" />
+        <Image Source="{DynamicResource Theme.BackgroundImage}" Stretch="UniformToFill" />
 
         <!-- Darken the edges and the top/bottom bands so text and controls stay readable over any art -->
-        <Border IsHitTestVisible="False">
-            <Border.Background>
-                <RadialGradientBrush RadiusX="75%" RadiusY="75%">
-                    <GradientStop Offset="0.45" Color="#00000000" />
-                    <GradientStop Offset="1" Color="#E0000000" />
-                </RadialGradientBrush>
-            </Border.Background>
-        </Border>
-        <Border IsHitTestVisible="False">
-            <Border.Background>
-                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
-                    <GradientStop Offset="0" Color="#D0000000" />
-                    <GradientStop Offset="0.12" Color="#00000000" />
-                    <GradientStop Offset="0.62" Color="#00000000" />
-                    <GradientStop Offset="1" Color="#F0000000" />
-                </LinearGradientBrush>
-            </Border.Background>
-        </Border>
-        <Border IsHitTestVisible="False" BorderBrush="#2E2748" BorderThickness="2" />
+        <Border IsHitTestVisible="False" Background="{DynamicResource Theme.EdgeShade}" />
+        <Border IsHitTestVisible="False" Background="{DynamicResource Theme.BandShade}" />
+        <Border IsHitTestVisible="False" BorderBrush="{DynamicResource Theme.WindowBorder}" BorderThickness="2" />
 
         <Grid RowDefinitions="Auto,*,Auto">
             <!-- Top bar: links centered, window buttons on the right -->
@@ -189,49 +165,41 @@
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top"
                             Margin="0,8,8,0" Spacing="4">
-                    <Button Classes="chrome settings" Click="Settings_Click" ToolTip.Tip="Settings">
-                        <Path Width="20" Height="20" Stretch="Uniform" Fill="#E4ECE6"
+                    <Button Classes="chrome settings" Click="Settings_Click" ToolTip.Tip="{x:Static config:Strings.SettingsTooltip}">
+                        <Path Width="20" Height="20" Stretch="Uniform" Fill="{DynamicResource Theme.ChromeGlyph}"
                               Data="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z" />
                     </Button>
-                    <Button Classes="chrome minimize" Click="Minimize_Click" ToolTip.Tip="Minimize">
-                        <Border Width="14" Height="3" Background="#E4ECE6" CornerRadius="1" />
+                    <Button Classes="chrome minimize" Click="Minimize_Click" ToolTip.Tip="{x:Static config:Strings.MinimizeTooltip}">
+                        <Border Width="14" Height="3" Background="{DynamicResource Theme.ChromeGlyph}" CornerRadius="1" />
                     </Button>
-                    <Button Classes="chrome close" Click="Close_Click" ToolTip.Tip="Close">
-                        <Path Data="M 0,0 L 14,14 M 14,0 L 0,14" Stroke="#E4ECE6" StrokeThickness="2.5" />
+                    <Button Classes="chrome close" Click="Close_Click" ToolTip.Tip="{x:Static config:Strings.CloseTooltip}">
+                        <Path Data="M 0,0 L 14,14 M 14,0 L 0,14" Stroke="{DynamicResource Theme.ChromeGlyph}" StrokeThickness="2.5" />
                     </Button>
                 </StackPanel>
             </Grid>
 
             <!-- Title and play button -->
             <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6">
-                <TextBlock Text="{Binding Title}" FontFamily="{StaticResource DisplayFont}"
-                           FontSize="92" FontWeight="Bold" LetterSpacing="4"
-                           HorizontalAlignment="Center" Foreground="{Binding TitleColor}">
-                    <TextBlock.Effect>
-                        <DropShadowEffect Color="#7FD6BC" BlurRadius="28" OffsetX="0" OffsetY="0" Opacity="0.85" />
-                    </TextBlock.Effect>
-                </TextBlock>
-                <TextBlock Text="{Binding Subtitle}" FontFamily="{StaticResource DisplayFont}" FontSize="17"
-                           HorizontalAlignment="Center" Foreground="{Binding SubtitleColor}">
-                    <TextBlock.Effect>
-                        <DropShadowEffect Color="Black" BlurRadius="6" OffsetX="0" OffsetY="1" Opacity="1" />
-                    </TextBlock.Effect>
-                </TextBlock>
+                <TextBlock Text="{Binding Title}" FontFamily="{DynamicResource Theme.DisplayFont}"
+                           FontSize="{DynamicResource Theme.TitleFontSize}" FontWeight="Bold" LetterSpacing="4"
+                           HorizontalAlignment="Center" Foreground="{DynamicResource Theme.TitleText}" Effect="{DynamicResource Theme.TitleShadow}" />
+                <TextBlock Text="{Binding Subtitle}" FontFamily="{DynamicResource Theme.DisplayFont}" FontSize="{DynamicResource Theme.SubtitleFontSize}"
+                           HorizontalAlignment="Center" Foreground="{DynamicResource Theme.SubtitleText}" Effect="{DynamicResource Theme.SubtitleShadow}" />
                 <Button Classes="play" Content="{Binding MainButtonText}" IsEnabled="{Binding MainButtonEnabled}"
                         IsVisible="{Binding MainButtonVisible}"
                         HorizontalAlignment="Center" Margin="0,28,0,0" Click="MainButton_Click" />
 
                 <!-- A newer launcher is optional: everything else keeps working while this is showing -->
                 <Border IsVisible="{Binding LauncherUpdateAvailable}" HorizontalAlignment="Center" Margin="0,18,0,0"
-                        Padding="14,6" CornerRadius="14" BorderThickness="1" BorderBrush="{StaticResource GoldBrush}" Background="#E0120E0B">
+                        Padding="14,6" CornerRadius="14" BorderThickness="1" BorderBrush="{DynamicResource Theme.NoticeBorder}" Background="{DynamicResource Theme.NoticeBackground}">
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <TextBlock Text="{Binding LauncherUpdateText}" FontSize="13" VerticalAlignment="Center"
-                                   Foreground="{x:Static config:LauncherConfig.DefaultTextColor}" />
+                                   Foreground="{DynamicResource Theme.NoticeText}" />
                         <Button Classes="dialog secondary" Content="{Binding UpdateLauncherText}" Click="UpdateLauncher_Click"
                                 MinWidth="0" Padding="12,2" FontSize="12" />
                         <Button Classes="chrome close" Width="22" Height="22" Click="DismissLauncherUpdate_Click"
                                 ToolTip.Tip="{Binding DismissLauncherUpdateText}">
-                            <Path Data="M 0,0 L 8,8 M 8,0 L 0,8" Stroke="#E8D6B0" StrokeThickness="1.5" />
+                            <Path Data="M 0,0 L 8,8 M 8,0 L 0,8" Stroke="{DynamicResource Theme.NoticeCloseGlyph}" StrokeThickness="1.5" />
                         </Button>
                     </StackPanel>
                 </Border>
@@ -241,28 +209,20 @@
             <Grid Grid.Row="2" Height="170">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,34" Spacing="6">
                     <Grid ColumnDefinitions="*,Auto,Auto" Width="520">
-                        <TextBlock Grid.Column="0" Text="{Binding ErrorMessage}" Foreground="#FF6B5E" FontSize="13"
-                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                   IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                            <TextBlock.Effect>
-                                <DropShadowEffect Color="Black" BlurRadius="4" OffsetX="0" OffsetY="1" Opacity="1" />
-                            </TextBlock.Effect>
-                        </TextBlock>
+                        <TextBlock Grid.Column="0" Text="{Binding ErrorMessage}" Foreground="{DynamicResource Theme.ErrorText}" FontSize="13"
+                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Effect="{DynamicResource Theme.ErrorTextShadow}"
+                                   IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         <Button Grid.Column="1" Classes="dialog secondary" Content="{Binding RetryText}" Click="Retry_Click"
                                 IsVisible="{Binding RetryReady}" MinWidth="0" Padding="12,2" FontSize="12" Margin="8,0,0,0" />
                         <Button Grid.Column="2" Classes="chrome close" Width="22" Height="22" Click="Cancel_Click"
-                                IsVisible="{Binding IsUpdating}" ToolTip.Tip="Cancel update">
-                            <Path Data="M 0,0 L 8,8 M 8,0 L 0,8" Stroke="#E4ECE6" StrokeThickness="1.5" />
+                                IsVisible="{Binding IsUpdating}" ToolTip.Tip="{x:Static config:Strings.CancelUpdateTooltip}">
+                            <Path Data="M 0,0 L 8,8 M 8,0 L 0,8" Stroke="{DynamicResource Theme.ChromeGlyph}" StrokeThickness="1.5" />
                         </Button>
                     </Grid>
 
-                    <!-- Assets/progress-frame.png (560x60); the bars sit 26 in from the sides and 6 from the top and bottom -->
+                    <!-- ProgressFrameImage (560x60); the bars sit 26 in from the sides and 6 from the top and bottom -->
                     <Grid Width="560" Height="60">
-                        <Image Source="{x:Static views:LauncherArt.ProgressFrame}" Stretch="Fill">
-                            <Image.Effect>
-                                <DropShadowEffect Color="Black" BlurRadius="18" OffsetX="0" OffsetY="0" Opacity="0.5" />
-                            </Image.Effect>
-                        </Image>
+                        <Image Source="{DynamicResource Theme.ProgressFrameImage}" Stretch="Fill" Effect="{DynamicResource Theme.ProgressFrameShadow}" />
                         <StackPanel Margin="26,6" Spacing="4">
                             <Grid>
                                 <ProgressBar Classes="bar total" Value="{Binding Progress}" />
@@ -279,6 +239,6 @@
         </Grid>
 
         <!-- Dims the launcher while a dialog is open -->
-        <Border Background="#B0000000" IsVisible="{Binding IsDialogOpen}" />
+        <Border Background="{DynamicResource Theme.DialogDim}" IsVisible="{Binding IsDialogOpen}" />
     </Grid>
 </Window>

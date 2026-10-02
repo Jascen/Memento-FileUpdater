@@ -39,10 +39,8 @@ public class MainViewModel : INotifyPropertyChanged
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), LauncherConfig.AppDataFolder, "downloads");
 
     public IReadOnlyList<NavLink> Links { get; } = LauncherConfig.Links;
-    public string Title => LauncherConfig.Title;
-    public string TitleColor => LauncherConfig.TitleColor;
-    public string Subtitle => LauncherConfig.Subtitle;
-    public string SubtitleColor => LauncherConfig.SubtitleColor;
+    public string Title => Strings.Title;
+    public string Subtitle => Strings.Subtitle;
 
     public string ErrorMessage
     {

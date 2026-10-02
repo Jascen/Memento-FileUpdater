@@ -1,0 +1,119 @@
+// The launcher's look: colors, gradients, shadows, fonts, text sizes and images. Built into the exe, so rebuild after editing.
+// The windows use each entry as {DynamicResource Theme.<name>}. An entry that is missing or can't be read is left out, so that
+// part falls back to Avalonia's default look (or is left blank for images) instead of stopping the launcher.
+// Colors are #RRGGBB or #AARRGGBB (AA = opacity, 00 transparent to FF solid), or a name like "Black".
+{
+  "fonts": {
+    // Comma-separated fallbacks. A font file in Theme/Fonts/ is used as "Fonts#Family Name"
+    "DisplayFont": "Cinzel, Trajan Pro, Georgia, Times New Roman, serif"
+  },
+
+  "sizes": {
+    "TitleFontSize": 92,
+    "SubtitleFontSize": 17,
+    "NavFontSize": 17,
+    "PlayFontSize": 26
+  },
+
+  // Files in Theme/. Keep each image at the size noted (drawn at 2x for high-DPI screens is fine), they are stretched to it
+  "images": {
+	// icon.ico is required
+    "BackgroundImage": "background.png",       // 900x675, the whole window
+    "PlayButtonImage": "play-button.png",      // 270x96, center Download/Play button. The hover glow follows its shape
+    "ProgressFrameImage": "progress-frame.png", // 560x60, box around both bars. The bars sit 26 in from the sides, 6 from top and bottom
+    "ProgressTotalImage": "progress-total.png", // 508x22, fill of the top bar (all files), revealed from the left
+    "ProgressFileImage": "progress-file.png"    // 508x22, fill of the bottom bar (current file)
+  },
+
+  "colors": {
+    "WindowBackground": "#0F0C1A",   // Behind the background image
+    "WindowBorder": "#2E2748",
+    "DialogDim": "#B0000000",        // Over the launcher while a dialog is open
+
+    "TitleText": "#F4EDD6",
+    "SubtitleText": "#D6E4DA",
+    "NavText": "#D6E4DA",            // Links along the top
+    "NavTextHover": "#FBF7E8",
+    "PlayText": "#F4EDD6",           // Label on the center button
+    "PlayGlow": "#7FD6BC",           // Glow around the center button, brighter on hover
+
+    "ProgressText": "#FFF6DC",       // Text on the progress bars
+    "ProgressTrack": "#A0120E20",    // Empty part of the progress bars
+    "ErrorText": "#FF6B5E",
+
+    // Launcher update notice under the center button
+    "NoticeBackground": "#E0120E0B",
+    "NoticeBorder": "#8DAFA2",
+    "NoticeText": "#FFF6DC",
+    "NoticeCloseGlyph": "#E8D6B0",
+
+    // Settings, minimize, close and cancel squares
+    "ChromeGlyph": "#E4ECE6",
+    "ChromeBorder": "#704A4270",
+    "ChromeSettings": "#B02A2350",
+    "ChromeSettingsHover": "#D03D3372",
+    "ChromeMinimize": "#B01E3A37",
+    "ChromeMinimizeHover": "#D02C5550",
+    "ChromeClose": "#B04A1830",
+    "ChromeCloseHover": "#D07A2446",
+
+    // Settings and confirm dialogs
+    "DialogBackground": "#F0161228",
+    "DialogTitleText": "#F4EDD6",
+    "DialogText": "#DCE6DE",
+    "DialogButtonText": "#F4EDD6",
+    "DialogButton": "#2E2452",
+    "DialogButtonHover": "#45377A",
+    "DialogButtonSecondary": "#181426",
+    "DialogButtonSecondaryHover": "#2A2340",
+    "InputBackground": "#0C0A16",    // Install folder box
+    "InputBorder": "#3E3662",
+    "InputText": "#B4CCC2",
+    "CheckBox": "#5FAE96",           // Ticked check boxes
+    "CheckBoxHover": "#82CCB4",
+    "CheckBoxPressed": "#467F6F",
+    "CheckBoxGlyph": "#120E20"       // The tick itself
+  },
+
+  // "linear" runs from start to end (x%,y% of the area); "radial" spreads from the center out to radius
+  "gradients": {
+    // Dialog borders, dialog buttons and the link underline
+    "Frame": {
+      "type": "linear", "start": "0%,0%", "end": "0%,100%",
+      "stops": [
+        { "offset": 0, "color": "#D0C9DCD2" },
+        { "offset": 0.45, "color": "#C08DAFA2" },
+        { "offset": 0.55, "color": "#C0506F68" },
+        { "offset": 1, "color": "#D0A6C2B6" }
+      ]
+    },
+    // Darkens the edges of the background image so text and controls stay readable over any art
+    "EdgeShade": {
+      "type": "radial", "radius": "75%",
+      "stops": [
+        { "offset": 0.45, "color": "#00000000" },
+        { "offset": 1, "color": "#E0000000" }
+      ]
+    },
+    // Darkens the top (links) and bottom (progress) bands of the background image
+    "BandShade": {
+      "type": "linear", "start": "0%,0%", "end": "0%,100%",
+      "stops": [
+        { "offset": 0, "color": "#D0000000" },
+        { "offset": 0.12, "color": "#00000000" },
+        { "offset": 0.62, "color": "#00000000" },
+        { "offset": 1, "color": "#F0000000" }
+      ]
+    }
+  },
+
+  // Glows and drop shadows behind text and images. blur and offsets are in pixels, opacity 0 to 1
+  "shadows": {
+    "TitleShadow": { "color": "#7FD6BC", "blur": 28, "offsetX": 0, "offsetY": 0, "opacity": 0.85 },
+    "SubtitleShadow": { "color": "Black", "blur": 6, "offsetX": 0, "offsetY": 1, "opacity": 1 },
+    "PlayTextShadow": { "color": "Black", "blur": 10, "offsetX": 0, "offsetY": 2, "opacity": 0.8 },
+    "ProgressTextShadow": { "color": "#1A0E2C", "blur": 5, "offsetX": 0, "offsetY": 0, "opacity": 1 },
+    "ErrorTextShadow": { "color": "Black", "blur": 4, "offsetX": 0, "offsetY": 1, "opacity": 1 },
+    "ProgressFrameShadow": { "color": "Black", "blur": 18, "offsetX": 0, "offsetY": 0, "opacity": 0.5 }
+  }
+}

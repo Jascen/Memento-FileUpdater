@@ -1,21 +1,10 @@
-using Avalonia.Media;
-
 namespace FileUpdaterClient.Config;
 
-//Build-time configuration for a server's launcher: branding, colors, server address and links.
-//TazUO launcher settings live in TazUOLauncherConfig.cs and on-screen text in Strings.cs. Player choices made at runtime live in Preferences.cs.
+//Build-time configuration for a server's launcher: server address, signing keys, links and folders.
+//The look and on-screen text live in Theme/ (theme.json and strings.json), TazUO launcher settings in TazUOLauncherConfig.cs.
+//Player choices made at runtime live in Preferences.cs.
 public static class LauncherConfig
 {
-    public const string Title = "";
-    public const string TitleColor = "#F4EDD6";
-
-    public const string Subtitle = "";
-    public const string SubtitleColor = "#D6E4DA";
-
-    public static SolidColorBrush DefaultTextColor = SolidColorBrush.Parse("#FFF6DC"); //Text on the progress bars
-    public static Color ProgressTextOutline = Color.Parse("#1A0E2C"); //Dark halo around that text so it reads on both bright fills and the empty track
-    public static SolidColorBrush ProgressBarBackground = SolidColorBrush.Parse("#A0120E20");
-
     public const string UpdateUrl = "http://127.0.0.1:8080/";
 
     //Public keys (base64, printed by `PackageSigner keygen`) whose signature the server's launcher and client packages must carry.
@@ -39,9 +28,9 @@ public static class LauncherConfig
     public static readonly string[] KeepLocalFiles = [];
 
     public const string DefaultInstallFolder = "Client"; //Created next to the updater exe unless the player picks another folder
-    //Per-user folder (e.g. %AppData%/UODiablo) that remembers the chosen install folder and preferences.
-    //Follows Title so each server's launcher keeps its own settings. Only set it separately if two launchers share a title
-    public const string AppDataFolder = Title;
+    //Per-user folder (e.g. %AppData%/Memento) that remembers the chosen install folder and preferences.
+    //Must be non-empty and unique per server so each launcher keeps its own settings. Changing it after release makes players pick their folder again
+    public const string AppDataFolder = "Memento";
 }
 
 public record NavLink(string Label, string Target)

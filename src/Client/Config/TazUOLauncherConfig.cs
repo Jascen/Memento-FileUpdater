@@ -2,7 +2,7 @@ namespace FileUpdaterClient.Config;
 
 //Build-time configuration for the TazUO launcher: whether it's used, where it installs to, and the profiles it starts with.
 //It is installed from the client package the server hosts (see LauncherConfig.TrustedPublicKeys).
-//Its on-screen text lives in Strings.cs.
+//Its on-screen text lives in Theme/strings.json.
 public static class TazUOLauncherConfig
 {
     //When false the TazUO launcher is never downloaded and there is no Play Now button, the updater only keeps files up to date
