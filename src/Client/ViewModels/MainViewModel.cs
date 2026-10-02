@@ -1,21 +1,19 @@
 using System.ComponentModel;
-using System.IO.Abstractions;
 using System.Runtime.CompilerServices;
 using Avalonia.Threading;
 using FileUpdaterClient.Updating;
 using FileUpdaterClient.Config;
-using FileUpdaterClient.TazUO;
 using FileUpdaterClient.UserSettings;
 
 namespace FileUpdaterClient.ViewModels;
 
-//Launcher state and actions. The window forwards clicks here and shows what these properties say.
-//UpdateService reports from background threads, so its events are posted to the UI thread before touching properties.
+//What the launcher window shows, and its actions. The work itself is done by an UpdateSession, one per install folder:
+//this turns the session's state into text and buttons. The session reports from background threads, so its events are
+//posted to the UI thread before touching properties.
 public class MainViewModel : INotifyPropertyChanged
 {
     private IMainView? _view;
-    private UpdateService? _updates; //Created once a usable install folder is known
-    private TazUOLauncher? _launcher; //Null when TazUOLauncherConfig.Enabled is off
+    private UpdateSession? _session; //Created once a usable install folder is known
 
     private string _errorMessage = string.Empty;
     private bool _isDialogOpen;
@@ -33,10 +31,6 @@ public class MainViewModel : INotifyPropertyChanged
     private string? _dismissedLauncherVersion; //A launcher version the player chose "Not now" for, hidden until the launcher restarts
     private DispatcherTimer? _launcherCheckTimer;
     public event PropertyChangedEventHandler? PropertyChanged;
-
-    //Where launcher and client packages are saved while they download
-    private static readonly string PackageDownloadFolder = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), LauncherConfig.AppDataFolder, "downloads");
 
     public IReadOnlyList<NavLink> Links { get; } = LauncherConfig.Links;
     public string Title => Strings.Title;
@@ -186,16 +180,16 @@ public class MainViewModel : INotifyPropertyChanged
 
     private async Task RefreshLauncherUpdateAsync()
     {
-        var updates = _updates;
-        if (updates == null || IsUpdating) return;
+        var session = _session;
+        if (session == null) return;
 
-        await updates.RefreshLauncherUpdateAsync();
-        if (updates == _updates && !IsUpdating) ShowLauncherUpdate();
+        await session.RefreshLauncherUpdateAsync();
+        if (session == _session && !session.IsBusy) ShowLauncherUpdate();
     }
 
     private void ShowLauncherUpdate()
     {
-        var version = _updates?.LauncherUpdate?.Version;
+        var version = _session?.LauncherUpdateVersion;
         LauncherUpdateAvailable = version != null && version != _dismissedLauncherVersion;
         if (version != null)
             LauncherUpdateText = string.Format(Strings.LauncherUpdateAvailable, version);
@@ -203,40 +197,27 @@ public class MainViewModel : INotifyPropertyChanged
 
     public void DismissLauncherUpdate()
     {
-        _dismissedLauncherVersion = _updates?.LauncherUpdate?.Version;
+        _dismissedLauncherVersion = _session?.LauncherUpdateVersion;
         LauncherUpdateAvailable = false;
     }
 
     //Downloads the newer launcher and restarts into it. The player asked for this, so it only ever happens on a click
     public async Task UpdateLauncherAsync()
     {
-        var updates = _updates;
-        if (updates == null || _view == null) return;
+        var session = _session;
+        if (session == null || _view == null) return;
 
-        if (IsUpdating)
-        {
-            if (!await _view.ConfirmAsync(Strings.LauncherUpdateBusyTitle, Strings.LauncherUpdateBusyMessage,
-                    Strings.LauncherUpdateBusyConfirm, Strings.CancelText))
-                return;
+        var wasBusy = session.IsBusy;
+        if (wasBusy && !await _view.ConfirmAsync(Strings.LauncherUpdateBusyTitle, Strings.LauncherUpdateBusyMessage,
+                Strings.LauncherUpdateBusyConfirm, Strings.CancelText))
+            return;
 
-            CancelUpdate();
-            for (var waited = 0; IsUpdating && waited < 100; waited++) //The cancelled run ends shortly
-                await Task.Delay(100);
-            if (IsUpdating || updates != _updates) return;
-        }
-
-        var previousText = ProgressText;
-        var wasReady = DownloadsReady;
-        IsUpdating = true;
-        DownloadsReady = false; //Hides the download button while the launcher update owns the progress bar
-        RetryReady = false;
+        var previousText = wasBusy ? Strings.Cancelled : ProgressText; //The running update is cancelled first
         ErrorMessage = string.Empty;
-        Progress = 0;
-        FileProgress = 0;
-        FileProgressText = string.Empty;
+        ResetProgress();
 
-        var result = await updates.UpdateLauncherAsync();
-        if (updates != _updates) return;
+        var result = await session.UpdateLauncherAsync();
+        if (result == null || session != _session) return; //Couldn't start, or the folder changed meanwhile
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
@@ -249,41 +230,26 @@ public class MainViewModel : INotifyPropertyChanged
 
             //Not applied (or cancelled): carry on with this version as before. A failure already set the error message
             ProgressText = previousText;
-            DownloadsReady = wasReady;
             Progress = 0;
-            IsUpdating = false;
             ShowLauncherUpdate();
         });
     }
 
     private async Task StartWithFolderAsync()
     {
-        var installPath = InstallLocation.Path;
-        _launcher = TazUOLauncherConfig.Enabled ? new TazUOLauncher(installPath) : null;
-        var localFiles = new LocalFiles(new FileSystem());
-        var server = new FileServerClient(LauncherConfig.UpdateUrl, localFiles);
-        //Without a trusted signing key nothing the server hosts as a package is ever installed
-        var packages = LauncherConfig.TrustedPublicKeys.Length == 0 ? null
-            : new PackageUpdater(server, localFiles, LauncherConfig.TrustedPublicKeys, PlatformId.Current, LauncherVersion.Current,
-                PackageDownloadFolder, new SelfUpdater(), _launcher, new PackageState());
-        var updates = new UpdateService(server, localFiles, installPath, packages, LauncherConfig.KeepLocalFiles);
-        //A service that has been replaced (the folder changed) may still be winding down, so its updates are ignored
-        updates.ProgressChanged += progress => Dispatcher.UIThread.Post(() => { if (updates == _updates) ShowProgress(progress); });
-        updates.FileProgressChanged += file => Dispatcher.UIThread.Post(() => { if (updates == _updates) ShowFileProgress(file); });
-        updates.ErrorOccurred += error => Dispatcher.UIThread.Post(() => { if (updates == _updates) ShowError(error); });
-        _updates = updates;
-        LauncherInstalled = _launcher?.IsInstalled ?? false;
+        _session?.Dispose(); //Stop anything still working in the old folder
+        var session = UpdateSession.Create(InstallLocation.Path);
+        session.ProgressChanged += progress => PostFor(session, () => ShowProgress(progress));
+        session.FileProgressChanged += file => PostFor(session, () => ShowFileProgress(file));
+        session.ErrorOccurred += error => PostFor(session, () => ShowError(error));
+        session.StateChanged += ShowState;
+        _session = session;
 
         //Start from a clean slate, since nothing from a previous folder applies
-        IsUpdating = false;
-        DownloadsReady = false;
-        RetryReady = false;
-        FilesVerified = false;
+        ShowState();
         ErrorMessage = string.Empty;
-        Progress = 0;
-        FileProgress = 0;
-        FileProgressText = string.Empty;
-        if (packages == null && TazUOLauncherConfig.Enabled)
+        ResetProgress();
+        if (session.HasClient && !session.PackagesConfigured)
             ErrorMessage = Strings.PackagesNotConfigured;
 
         StartLauncherChecks();
@@ -298,63 +264,38 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    public async Task<UpdateResult?> CheckForUpdatesAsync()
-    {
-        if (_updates == null || IsUpdating) return null; //No folder yet, or already checking
-
-        IsUpdating = true;
-        FilesVerified = false;
-        DownloadsReady = false;
-        RetryReady = false;
-        ErrorMessage = string.Empty;
-        Progress = 0;
-        FileProgress = 0;
-        FileProgressText = string.Empty;
-
-        var updates = _updates;
-        var result = await updates.CheckAsync();
-        if (updates != _updates) return null; //The folder changed meanwhile, so this result is stale
-        await Dispatcher.UIThread.InvokeAsync(() => ShowResult(result, wasDownload: false)); //Queued behind any progress still waiting to be shown
-        return result;
-    }
+    public Task CheckForUpdatesAsync() => RunAsync(session => session.CheckAsync());
 
     //Checks again and, if anything is still missing or out of date, downloads it straight away
-    public async Task RetryAsync()
-    {
-        var result = await CheckForUpdatesAsync();
-        if (result is UpdateResult.UpdatesReady or UpdateResult.PackagesReady)
-            await DownloadUpdatesAsync();
-    }
+    public Task RetryAsync() => RunAsync(session => session.RetryAsync());
 
     //The center button downloads pending updates first, then launches the game
     public async Task MainButtonAsync()
     {
         if (DownloadsReady)
-            await DownloadUpdatesAsync();
+            await RunAsync(session => session.DownloadAsync());
         else
             await PlayAsync();
     }
 
-    private async Task DownloadUpdatesAsync()
+    private async Task RunAsync(Func<UpdateSession, Task<UpdateResult?>> run)
     {
-        if (_updates == null || IsUpdating) return; //Ignore repeat clicks
+        var session = _session;
+        if (session == null || session.IsBusy) return; //No folder yet, or already running
 
-        DownloadsReady = false;
-        RetryReady = false;
         ErrorMessage = string.Empty;
-        IsUpdating = true;
-        FilesVerified = false;
+        ResetProgress();
 
-        var updates = _updates;
-        var result = await updates.DownloadAsync();
-        if (updates != _updates) return; //The folder changed meanwhile, so this result is stale
-        await Dispatcher.UIThread.InvokeAsync(() => ShowResult(result, wasDownload: true));
+        var result = await run(session);
+        if (result == null || session != _session) return; //Didn't run, or the folder changed meanwhile, so this result is stale
+        await Dispatcher.UIThread.InvokeAsync(() => ShowResult(result.Value)); //Queued behind any progress still waiting to be shown
     }
 
     //Opens the TazUO launcher, first asking the player to confirm if the files weren't fully verified
     private async Task PlayAsync()
     {
-        if (_launcher == null || _view == null) return;
+        var session = _session;
+        if (session is not { HasClient: true } || _view == null) return;
 
         if (!FilesVerified && Preferences.Current.WarnIfNotVerified
             && !await _view.ConfirmAsync(Strings.UnverifiedTitle, Strings.UnverifiedMessage, Strings.PlayAnyway, Strings.CancelText))
@@ -362,7 +303,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         try
         {
-            _launcher.Start();
+            session.StartClient();
         }
         catch (Exception ex)
         {
@@ -392,11 +333,31 @@ public class MainViewModel : INotifyPropertyChanged
             return;
         }
 
-        CancelUpdate(); //Stop anything still working in the old folder
         await StartWithFolderAsync();
     }
 
-    public void CancelUpdate() => _updates?.Cancel();
+    public void CancelUpdate() => _session?.Cancel();
+
+    //Runs on the UI thread, unless the session has been replaced by then
+    private void PostFor(UpdateSession session, Action action) =>
+        Dispatcher.UIThread.Post(() => { if (session == _session) action(); });
+
+    private void ResetProgress()
+    {
+        Progress = 0;
+        FileProgress = 0;
+        FileProgressText = string.Empty;
+    }
+
+    //Copies the session's state to the properties the window binds to
+    private void ShowState()
+    {
+        IsUpdating = _session?.IsBusy ?? false;
+        DownloadsReady = _session?.DownloadsReady ?? false;
+        FilesVerified = _session?.FilesVerified ?? false;
+        RetryReady = _session?.RetryReady ?? false;
+        LauncherInstalled = _session?.ClientInstalled ?? false;
+    }
 
     private void ShowProgress(UpdateProgress progress)
     {
@@ -453,7 +414,8 @@ public class MainViewModel : INotifyPropertyChanged
         };
     }
 
-    private void ShowResult(UpdateResult result, bool wasDownload)
+    //Says how the run ended. The session's state (busy, downloads ready..) is already shown by ShowState
+    private void ShowResult(UpdateResult result)
     {
         switch (result)
         {
@@ -461,37 +423,29 @@ public class MainViewModel : INotifyPropertyChanged
             case UpdateResult.PackagesReady:
                 Progress = 0;
                 ProgressText = result == UpdateResult.UpdatesReady ? Strings.UpdatesReady : Strings.PackagesReady;
-                DownloadsReady = true;
                 break;
             case UpdateResult.Restarting:
                 //The new launcher takes over, so the window stays busy until this process exits
                 ProgressText = Strings.Restarting;
                 return;
             case UpdateResult.Finished:
-                var failed = _updates?.FailedFiles.Count ?? 0;
-                FilesVerified = _updates?.FilesVerified ?? false;
+                var failed = _session?.FailedFileCount ?? 0;
                 Progress = 100;
                 FileProgress = 100;
                 ProgressText = failed > 0 ? string.Format(Strings.FinishedWithFailures, failed)
-                    : _launcher is { IsInstalled: false } ? Strings.FinishedNoClient //Nothing to play yet, so don't claim all is well
+                    : _session is { HasClient: true, ClientInstalled: false } ? Strings.FinishedNoClient //Nothing to play yet, so don't claim all is well
                     : Strings.Finished;
                 FileProgressText = string.Empty;
-                RetryReady = failed > 0;
                 break;
             case UpdateResult.Failed:
-                //The error line says why. Downloads that were waiting are re-found by Retry
-                ProgressText = Strings.CheckFailed;
-                RetryReady = true;
+                ProgressText = Strings.CheckFailed; //The error line says why
                 break;
             case UpdateResult.Cancelled:
-                //A cancelled download leaves known out of date files, so offer it again. A cancelled check just leaves them unverified
                 ProgressText = Strings.Cancelled;
-                DownloadsReady = wasDownload;
                 break;
         }
 
-        LauncherInstalled = _launcher?.IsInstalled ?? false;
-        IsUpdating = false;
+        ShowState(); //The client may have just been installed
         ShowLauncherUpdate();
     }
 

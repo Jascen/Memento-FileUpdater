@@ -10,7 +10,7 @@ namespace FileUpdaterClient.TazUO;
 
 //Installs the TazUO launcher (from the package the server hosts) next to the game files, gives it ready-made profiles
 //for our shard, and starts it. PackageUpdater decides when to install; this class only knows how.
-public class TazUOLauncher(string installPath) : IClientInstaller
+public class TazUOLauncher(string installPath) : IGameClient
 {
     public string LauncherDirectory => Path.Combine(installPath, TazUOLauncherConfig.InstallFolder);
 
