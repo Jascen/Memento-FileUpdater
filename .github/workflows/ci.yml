@@ -13,19 +13,8 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
 
-      - name: Build server
-        run: dotnet build src/Server -c Release
-
-      - name: Test client
-        run: dotnet test src/Client.Tests -c Release
-
-      - name: Test server
-        run: dotnet test src/Server.Tests -c Release
-
-      - name: Test packages
-        run: dotnet test src/PackageManifest.Tests -c Release
-
-      - name: Build package signer
-        run: dotnet build src/PackageSigner -c Release
+      # Builds every project in the solution (launcher, server, package signer) and runs all the tests
+      - name: Build and test
+        run: dotnet test FileUpdater.sln -c Release

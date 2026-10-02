@@ -1,4 +1,3 @@
-using FileUpdaterPackages;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Enumeration;
@@ -19,10 +18,13 @@ public class UpdateService
     private readonly string _installPath;
     private readonly IPackageUpdater? _packages;
     private readonly IReadOnlyCollection<string> _keepLocalFiles;
+    private readonly IReadOnlyCollection<string> _reservedPaths;
     private readonly HashCache _hashes;
 
     private readonly ConcurrentQueue<FileEntry> _toCompare = new();
     private readonly ConcurrentQueue<FileEntry> _toDownload = new();
+    private List<FileEntry> _fileList = new(); //The server's list as last fetched, apart from reserved paths
+    private string[] _ignored = []; //Files and folders the player's ignore list covered in the last run
     private readonly Stopwatch _downloadClock = new(); //Wall-clock time of the download phase, shared by all workers
     private CancellationTokenSource _cancellation = new();
     private PackageUpdates _packageUpdates = PackageUpdates.None; //What the last check found out of date in the signed manifest
@@ -52,69 +54,27 @@ public class UpdateService
     //Files the last run couldn't download
     public IReadOnlyCollection<string> FailedFiles => _failedFiles.ToArray();
 
+    //Server files and folders the last run skipped because the player's ignore list covers them, sorted.
+    //A folder is listed once with a trailing /, however many of the server's files are in it
+    public IReadOnlyList<string> IgnoredItems => _ignored;
+
     //packages is null when the server hosts no packages for this launcher (no trusted signing key), so only files are updated.
-    //keepLocalFiles are name patterns (e.g. "*.cfg") for files players change themselves: downloaded only when missing, never replaced
+    //keepLocalFiles are name patterns (e.g. "*.cfg") for files players change themselves: downloaded only when missing, never replaced.
+    //reservedPaths are files or folders inside the install folder that the file list may never write to, like the folder
+    //a signed package is installed into: the file list isn't signed, so it must not be a way around the signature
     public UpdateService(FileServerClient server, LocalFiles localFiles, string installPath, IPackageUpdater? packages,
-        IReadOnlyCollection<string>? keepLocalFiles = null)
+        IReadOnlyCollection<string>? keepLocalFiles = null, IReadOnlyCollection<string>? reservedPaths = null)
     {
         _server = server;
         _localFiles = localFiles;
         _installPath = installPath;
         _packages = packages;
         _keepLocalFiles = keepLocalFiles ?? [];
+        _reservedPaths = [HashCache.FileName, IgnoreRules.FileName, .. reservedPaths ?? []];
         _hashes = new HashCache(localFiles, installPath);
     }
 
     public void Cancel() => _cancellation.Cancel();
-
-    //A newer version of this launcher found by the last check or refresh, or null. It never holds anything else up:
-    //the player decides when to apply it with UpdateLauncherAsync
-    public PackageEntry? LauncherUpdate => _packageUpdates.Launcher;
-
-    //Looks at the server's signed manifest again for a newer launcher, without comparing any files.
-    //Meant for checking now and then while the launcher stays open, so failures are only logged
-    public async Task RefreshLauncherUpdateAsync()
-    {
-        if (_packages == null) return;
-
-        try
-        {
-            var found = await _packages.CheckAsync(CancellationToken.None);
-            _packageUpdates = _packageUpdates with { Launcher = found.Launcher };
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine($"Couldn't check for a launcher update: {e.Message}");
-        }
-    }
-
-    //Downloads the launcher update found by the last check and replaces this launcher with it.
-    //Finished means there was nothing to do, Restarting that the new launcher is taking over, Failed that the update
-    //couldn't be applied (ErrorOccurred says why) and this launcher carries on
-    public async Task<UpdateResult> UpdateLauncherAsync()
-    {
-        var launcher = _packageUpdates.Launcher;
-        if (_packages == null || launcher == null) return UpdateResult.Finished;
-
-        if (_cancellation.IsCancellationRequested) _cancellation = new CancellationTokenSource();
-        var token = _cancellation.Token;
-        try
-        {
-            var restarting = await _packages.UpdateLauncherAsync(launcher, progress => ProgressChanged?.Invoke(progress),
-                error => ErrorOccurred?.Invoke(error), token);
-            return restarting ? UpdateResult.Restarting : UpdateResult.Failed;
-        }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
-        {
-            return UpdateResult.Cancelled;
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e.ToString());
-            ErrorOccurred?.Invoke(new UpdateErrorInfo(UpdateError.SelfUpdateFailed));
-            return UpdateResult.Failed;
-        }
-    }
 
     //Checks the server's file list against local files, stopping at the first difference. Nothing is downloaded here
     public Task<UpdateResult> CheckAsync() => RunAsync(async token =>
@@ -133,11 +93,18 @@ public class UpdateService
         return await Finish(token);
     });
 
-    //Installs the TazUO launcher if needed, then checks the files CheckAsync skipped and downloads everything that differs.
-    //A newer version of this launcher is not applied here, that is UpdateLauncherAsync
+    //Installs the TazUO launcher if needed, then checks the files CheckAsync skipped and downloads everything that differs
     public Task<UpdateResult> DownloadAsync() => RunAsync(async token =>
     {
-        if (_needsFileList && !await LoadFileList(token)) return UpdateResult.Failed;
+        if (_needsFileList)
+        {
+            if (!await LoadFileList(token)) return UpdateResult.Failed;
+        }
+        else
+        {
+            ApplyIgnoreList(); //The player may have changed it since the check
+        }
+
         if (!await CheckPackages(token)) return UpdateResult.Failed;
 
         await ApplyPackages(token);
@@ -185,12 +152,22 @@ public class UpdateService
     {
         _toCompare.Clear();
         _toDownload.Clear();
+        _fileList = new List<FileEntry>();
         ProgressChanged?.Invoke(new UpdateProgress(UpdatePhase.RequestingFileList, 0, 0));
 
         try
         {
             foreach (var file in await _server.GetFileListAsync(_installPath, token))
+            {
+                if (LocalFiles.IsReserved(_installPath, file.Name, _reservedPaths))
+                {
+                    Console.WriteLine($"[{file.Name}] is not the file list's to update, skipping..");
+                    continue;
+                }
+
+                _fileList.Add(file);
                 _toCompare.Enqueue(file);
+            }
         }
         catch (UpdateServerException e)
         {
@@ -199,9 +176,39 @@ public class UpdateService
             return false;
         }
 
+        ApplyIgnoreList();
         _compareTotal = _toCompare.Count;
         _needsFileList = false;
         return true;
+    }
+
+    //Reads the install folder's ignore list again and drops what it covers from the files still to compare or download.
+    //Ignored files are the player's choice, so they don't count against FilesVerified
+    private void ApplyIgnoreList()
+    {
+        var rules = IgnoreRules.None;
+        try
+        {
+            rules = IgnoreRules.Parse(_localFiles.ReadAllTextIfExists(IgnoreRules.PathIn(_installPath)));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Console.WriteLine($"Couldn't read {IgnoreRules.FileName}, nothing is ignored: {e.Message}");
+        }
+
+        _ignored = _fileList.Select(file => rules.Match(file.Name)).OfType<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (_ignored.Length == 0) return;
+
+        foreach (var queue in new[] { _toCompare, _toDownload })
+        {
+            var keep = queue.Where(file => rules.Match(file.Name) == null).ToList();
+            queue.Clear();
+            foreach (var file in keep)
+                queue.Enqueue(file);
+        }
+
+        Console.WriteLine($"Skipping {_ignored.Length} ignored file(s) or folder(s): {string.Join(", ", _ignored)}");
     }
 
     private async Task<UpdateResult> Finish(CancellationToken token)
@@ -245,7 +252,7 @@ public class UpdateService
         catch (Exception e) when (!token.IsCancellationRequested)
         {
             Console.WriteLine(e.ToString());
-            ErrorOccurred?.Invoke(new UpdateErrorInfo(UpdateError.LauncherFailed));
+            ErrorOccurred?.Invoke(new UpdateErrorInfo(UpdateError.TazUOInstallFailed));
         }
     }
 

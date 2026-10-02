@@ -39,6 +39,7 @@ public static class Strings
     public const string SelfUpdateError = "Couldn't update the launcher, it will be retried next time.";
     public const string PackagesUntrustedError = "The server's launcher updates couldn't be verified, so they were not installed.";
     public const string PackagesNotConfigured = "This launcher has no signing key set up, so it can't install the TazUO launcher.";
+    public const string InsecureServerError = "This launcher's update address isn't secure (https), so nothing was downloaded. You can allow it in Settings.";
     public const string FileFailedError = "Failed to download [{0}] after several attempts, skipping.."; //{0} = file name
     public const string FileLockedError = "[{0}] is in use. Close the game and click Retry to finish updating."; //{0} = file name
     public const string LaunchError = "Unable to start the TazUO launcher."; //Play button couldn't start it
@@ -53,4 +54,11 @@ public static class Strings
     public const string UnverifiedMessage = "The status of your game files is unknown. They may be missing or out of date, which can cause problems in game.";
     public const string PlayAnyway = "Play anyway";
     public const string CancelText = "Cancel";
+    public const string OkText = "OK";
+
+    //The ignore list (Settings, saved as .launcherignore in the install folder)
+    public const string IgnoredSkipped = "{0} file(s) or folder(s) skipped because they are ignored."; //{0} = number of files and folders
+    public const string ShowIgnored = "Show";
+    public const string IgnoredTitle = "Ignored files";
+    public const string IgnoredListIntro = "These are on the server but match your ignore list in Settings, so they are never downloaded:";
 }

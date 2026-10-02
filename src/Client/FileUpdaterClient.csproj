@@ -8,9 +8,6 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net9.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
     <ApplicationIcon>Assets/icon.ico</ApplicationIcon>
     <PublishSingleFile>true</PublishSingleFile>
     <RuntimeIdentifiers>win-x64;linux-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
@@ -28,7 +25,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../PackageManifest/PackageManifest.csproj" />
+    <!-- The tests build this project framework-dependent; without this the library would be built a second time
+         with their settings, racing the first build for the same output files -->
+    <ProjectReference Include="../PackageManifest/PackageManifest.csproj" GlobalPropertiesToRemove="SelfContained;RuntimeIdentifier;PublishSingleFile" />
   </ItemGroup>
 
   <ItemGroup>

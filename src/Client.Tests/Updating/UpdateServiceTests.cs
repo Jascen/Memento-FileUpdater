@@ -8,17 +8,18 @@ namespace FileUpdaterClient.Tests.Updating;
 //Runs against an in-memory file system and fake server, so nothing touches the disk or network
 public class UpdateServiceTests
 {
-    private const string Url = "http://updates.test/";
+    private const string Url = "https://updates.test/";
     private static readonly string InstallPath = MockUnixSupport.Path(@"C:\game");
     private readonly MockFileSystem _fileSystem = new();
     private readonly FakeServer _server = new();
 
     public UpdateServiceTests() => _fileSystem.Directory.CreateDirectory(InstallPath);
 
-    private UpdateService CreateService(IPackageUpdater? packages = null, string[]? keepLocalFiles = null)
+    private UpdateService CreateService(IPackageUpdater? packages = null, string[]? keepLocalFiles = null,
+        string[]? reservedPaths = null, string url = Url, Func<bool>? allowInsecure = null)
     {
         var localFiles = new LocalFiles(_fileSystem);
-        return new UpdateService(new FileServerClient(Url, localFiles, _server), localFiles, InstallPath, packages, keepLocalFiles)
+        return new UpdateService(new FileServerClient(url, localFiles, _server, allowInsecure), localFiles, InstallPath, packages, keepLocalFiles, reservedPaths)
         {
             RetryDelay = _ => TimeSpan.Zero,
         };
@@ -154,13 +155,182 @@ public class UpdateServiceTests
         Assert.Empty(_server.Downloads);
     }
 
+    [Theory]
+    [InlineData("TazUO Launcher/TazUOLauncher.exe")]
+    [InlineData("tazuo launcher/plugins/evil.dll")] //Case doesn't get around it
+    [InlineData("maps/../TazUO Launcher/TazUOLauncher.exe")]
+    [InlineData("TazUO Launcher")]
+    [InlineData(HashCache.FileName)] //The launcher's own record of what it hashed
+    public async Task ReservedPathsAreNeverDownloaded(string name)
+    {
+        //Arrange
+        _server.RawList = $$"""[{"name":"{{name}}","md5":"{{FakeServer.Md5("x")}}"},{"name":"a.mul","md5":"{{FakeServer.Md5("new")}}"}]""";
+        _server.Add("a.mul", "new");
+        var service = CreateService(reservedPaths: ["TazUO Launcher"]);
+        await service.CheckAsync();
+
+        //Act
+        var result = await service.DownloadAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result);
+        Assert.True(service.FilesVerified); //Not counted as a failure, it was never the file list's to update
+        Assert.Equal(["a.mul"], _server.Downloads);
+    }
+
+    [Fact]
+    public async Task FoldersThatOnlyShareAReservedPathsPrefixAreStillUpdated()
+    {
+        //Arrange
+        _server.Add("TazUO Launcher Skins/skin.png", "art");
+        var service = CreateService(reservedPaths: ["TazUO Launcher"]);
+        await service.CheckAsync();
+
+        //Act
+        await service.DownloadAsync();
+
+        //Assert
+        Assert.Equal("art", ReadLocal(Path.Combine("TazUO Launcher Skins", "skin.png")));
+    }
+
+    [Fact]
+    public async Task AServerThatIsNotHttpsIsNeverAsked()
+    {
+        //Arrange
+        _server.Add("a.mul", "new");
+        var errors = new List<UpdateErrorInfo>();
+        var service = CreateService(url: "http://updates.test/");
+        service.ErrorOccurred += errors.Add;
+
+        //Act
+        var result = await service.CheckAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Failed, result);
+        Assert.Equal([new UpdateErrorInfo(UpdateError.InsecureServer)], errors);
+        Assert.Equal(0, _server.Requests);
+    }
+
+    [Fact]
+    public async Task AllowingInsecureDownloadsLetsAnHttpServerBeUsedStraightAway()
+    {
+        //Arrange
+        _server.Add("a.mul", "new");
+        var allowed = false;
+        var service = CreateService(url: "http://updates.test/", allowInsecure: () => allowed);
+        var refused = await service.CheckAsync();
+        allowed = true; //The player ticks the setting, the launcher isn't restarted
+        await service.CheckAsync();
+
+        //Act
+        var result = await service.DownloadAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Failed, refused);
+        Assert.Equal(UpdateResult.Finished, result);
+        Assert.Equal("new", ReadLocal("a.mul"));
+    }
+
+    [Fact]
+    public async Task AnAddressWithoutATrailingSlashWorksTheSame()
+    {
+        //Arrange
+        _server.Add("maps/a.mul", "new");
+        var service = CreateService(url: "https://updates.test");
+        await service.CheckAsync();
+
+        //Act
+        var result = await service.DownloadAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result);
+        Assert.Equal(["/file/maps/a.mul"], _server.FilePaths);
+    }
+
+    [Fact]
+    public async Task IgnoredFilesAndFoldersAreNeverDownloaded()
+    {
+        //Arrange
+        _server.Add("map0.mul", "new");
+        _server.Add("map1.mul", "new");
+        _server.Add("Music/a.mp3", "new");
+        _server.Add("Music/b.mp3", "new");
+        WriteLocal("map0.mul", "my own edit");
+        WriteLocal(IgnoreRules.FileName, "map0.mul\nMusic/\n");
+        var service = CreateService();
+        await service.CheckAsync();
+
+        //Act
+        var result = await service.DownloadAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result);
+        Assert.True(service.FilesVerified); //Ignoring is the player's choice, not a failure
+        Assert.Equal(["map1.mul"], _server.Downloads);
+        Assert.Equal("my own edit", ReadLocal("map0.mul"));
+        Assert.Equal(["map0.mul", "Music/"], service.IgnoredItems); //The folder counts once
+    }
+
+    [Fact]
+    public async Task AChangedFileThatIsIgnoredDoesntCountAsAnUpdate()
+    {
+        //Arrange
+        _server.Add("map0.mul", "new");
+        WriteLocal("map0.mul", "my own edit");
+        WriteLocal(IgnoreRules.FileName, "map0.mul");
+        var service = CreateService();
+
+        //Act
+        var result = await service.CheckAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result);
+        Assert.Equal(["map0.mul"], service.IgnoredItems);
+    }
+
+    [Fact]
+    public async Task AFileIgnoredAfterTheCheckIsntDownloaded()
+    {
+        //Arrange
+        _server.Add("map0.mul", "new");
+        _server.Add("map1.mul", "new");
+        var service = CreateService();
+        await service.CheckAsync();
+        WriteLocal(IgnoreRules.FileName, "map0.mul"); //Added in Settings before clicking Download
+
+        //Act
+        await service.DownloadAsync();
+
+        //Assert
+        Assert.Equal(["map1.mul"], _server.Downloads);
+        Assert.Equal(["map0.mul"], service.IgnoredItems);
+    }
+
+    [Fact]
+    public async Task TheServerCantReplaceThePlayersIgnoreList()
+    {
+        //Arrange
+        _server.Add(IgnoreRules.FileName, "");
+        _server.Add("map0.mul", "new");
+        WriteLocal(IgnoreRules.FileName, "map0.mul");
+        var service = CreateService();
+        await service.CheckAsync();
+
+        //Act
+        await service.DownloadAsync();
+
+        //Assert
+        Assert.Empty(_server.Downloads);
+        Assert.Equal("map0.mul", ReadLocal(IgnoreRules.FileName));
+    }
+
     [Fact]
     public async Task CheckReportsPackagesThatNeedUpdating()
     {
         //Arrange
         _server.Add("a.mul", "same");
         WriteLocal("a.mul", "same");
-        var packages = new FakePackageUpdater { Updates = FakePackageUpdater.ClientPending };
+        var packages = new FakePackageUpdater { Updates = FakePackageUpdater.TazUOPending };
         var service = CreateService(packages);
 
         //Act
@@ -177,7 +347,7 @@ public class UpdateServiceTests
         //Arrange
         _server.Add("a.mul", "new");
         WriteLocal("a.mul", "old");
-        var service = CreateService(new FakePackageUpdater { Updates = FakePackageUpdater.ClientPending });
+        var service = CreateService(new FakePackageUpdater { Updates = FakePackageUpdater.TazUOPending });
 
         //Act
         var result = await service.CheckAsync();
@@ -192,7 +362,7 @@ public class UpdateServiceTests
         //Arrange
         _server.Add("a.mul", "new");
         var order = new List<string>();
-        var packages = new FakePackageUpdater { Updates = FakePackageUpdater.ClientPending, OnApply = () => order.Add("packages") };
+        var packages = new FakePackageUpdater { Updates = FakePackageUpdater.TazUOPending, OnApply = () => order.Add("packages") };
         var service = CreateService(packages);
         service.FileProgressChanged += file => { if (!order.Contains("files")) order.Add("files"); };
         await service.CheckAsync();
@@ -225,107 +395,6 @@ public class UpdateServiceTests
     }
 
     [Fact]
-    public async Task ANewerLauncherDoesntHoldUpTheCheck()
-    {
-        //Arrange
-        _server.Add("a.mul", "same");
-        WriteLocal("a.mul", "same");
-        var packages = new FakePackageUpdater { Updates = FakePackageUpdater.LauncherPending };
-        var service = CreateService(packages);
-
-        //Act
-        var result = await service.CheckAsync();
-
-        //Assert
-        Assert.Equal(UpdateResult.Finished, result); //Not PackagesReady: Play stays available
-        Assert.Equal("2.0.0", service.LauncherUpdate?.Version);
-    }
-
-    [Fact]
-    public async Task DownloadNeverReplacesTheLauncher()
-    {
-        //Arrange
-        _server.Add("a.mul", "new");
-        var packages = new FakePackageUpdater { Updates = FakePackageUpdater.LauncherPending, Restart = true };
-        var service = CreateService(packages);
-        await service.CheckAsync();
-
-        //Act
-        var result = await service.DownloadAsync();
-
-        //Assert
-        Assert.Equal(UpdateResult.Finished, result);
-        Assert.Empty(packages.LauncherUpdates);
-        Assert.Equal("new", ReadLocal("a.mul")); //Files were still downloaded
-    }
-
-    [Fact]
-    public async Task UpdateLauncherReportsRestartingWhenTheLauncherReplacesItself()
-    {
-        //Arrange
-        var packages = new FakePackageUpdater { Updates = FakePackageUpdater.LauncherPending, Restart = true };
-        var service = CreateService(packages);
-        await service.CheckAsync();
-
-        //Act
-        var result = await service.UpdateLauncherAsync();
-
-        //Assert
-        Assert.Equal(UpdateResult.Restarting, result);
-        Assert.Equal("2.0.0", Assert.Single(packages.LauncherUpdates).Version);
-    }
-
-    [Fact]
-    public async Task UpdateLauncherFailsWhenItIsNotApplied()
-    {
-        //Arrange
-        var packages = new FakePackageUpdater { Updates = FakePackageUpdater.LauncherPending };
-        var service = CreateService(packages);
-        await service.CheckAsync();
-
-        //Act
-        var result = await service.UpdateLauncherAsync();
-
-        //Assert
-        Assert.Equal(UpdateResult.Failed, result);
-    }
-
-    [Fact]
-    public async Task UpdateLauncherDoesNothingWhenThereIsNoNewerLauncher()
-    {
-        //Arrange
-        var packages = new FakePackageUpdater();
-        var service = CreateService(packages);
-        await service.CheckAsync();
-
-        //Act
-        var result = await service.UpdateLauncherAsync();
-
-        //Assert
-        Assert.Equal(UpdateResult.Finished, result);
-        Assert.Empty(packages.LauncherUpdates);
-    }
-
-    [Fact]
-    public async Task RefreshFindsANewerLauncherAndIgnoresCheckFailures()
-    {
-        //Arrange
-        var packages = new FakePackageUpdater();
-        var service = CreateService(packages);
-
-        //Act
-        packages.Updates = FakePackageUpdater.LauncherPending;
-        await service.RefreshLauncherUpdateAsync();
-        var found = service.LauncherUpdate;
-        packages.CheckError = new UpdateServerException(UpdateError.ConnectionFailed, "offline");
-        await service.RefreshLauncherUpdateAsync();
-
-        //Assert
-        Assert.Equal("2.0.0", found?.Version);
-        Assert.Equal("2.0.0", service.LauncherUpdate?.Version); //A failed refresh keeps what was known
-    }
-
-    [Fact]
     public async Task UntrustedPackagesFailTheCheck()
     {
         //Arrange
@@ -349,7 +418,7 @@ public class UpdateServiceTests
         //Arrange
         _server.Add("a.mul", "same");
         WriteLocal("a.mul", "same");
-        var packages = new FakePackageUpdater { ApplyError = UpdateError.LauncherFailed };
+        var packages = new FakePackageUpdater { ApplyError = UpdateError.TazUOInstallFailed };
         var service = CreateService(packages);
         var errors = new List<UpdateErrorInfo>();
         service.ErrorOccurred += errors.Add;
@@ -359,7 +428,7 @@ public class UpdateServiceTests
 
         //Assert
         Assert.Equal(UpdateResult.Finished, result); //Game files are fine, the launcher install is retried next time
-        Assert.Equal([new UpdateErrorInfo(UpdateError.LauncherFailed)], errors);
+        Assert.Equal([new UpdateErrorInfo(UpdateError.TazUOInstallFailed)], errors);
     }
 
     [Fact]

@@ -9,7 +9,9 @@
         <StackPanel Spacing="16">
             <TextBlock Name="TitleText" FontFamily="{StaticResource DisplayFont}" FontSize="22" FontWeight="Bold"
                        Foreground="#F3D58A" />
-            <TextBlock Name="MessageText" TextWrapping="Wrap" FontSize="14" Foreground="#E8DCC0" LineHeight="20" />
+            <ScrollViewer MaxHeight="320" HorizontalScrollBarVisibility="Disabled">
+                <TextBlock Name="MessageText" TextWrapping="Wrap" FontSize="14" Foreground="#E8DCC0" LineHeight="20" />
+            </ScrollViewer>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,6,0,0">
                 <Button Name="CancelButton" Classes="dialog secondary" Click="Cancel_Click" IsCancel="True" />
                 <Button Name="ConfirmButton" Classes="dialog" Click="Confirm_Click" IsDefault="True" />

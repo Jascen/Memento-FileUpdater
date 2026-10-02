@@ -4,19 +4,32 @@ using System.Threading.Channels;
 
 namespace FileUpdaterServer;
 
-//Keeps the cache file in step with the files directory: builds it on startup, again shortly after
+//The file list served at GET /, as JSON. Null until the first build after startup has finished
+public class FileListCache
+{
+    private volatile string? _json;
+
+    public string? Json
+    {
+        get => _json;
+        set => _json = value;
+    }
+}
+
+//Keeps the file list in step with the files directory: builds it on startup, again shortly after
 //anything in the directory changes, and on the CacheRegenerationInterval as a safety net
 public class CacheService : BackgroundService
 {
     private readonly ServerSettings _settings;
+    private readonly FileListCache _cache;
     private readonly ILogger<CacheService> _logger;
     private readonly FileListBuilder _builder;
     private readonly Channel<bool> _changes = Channel.CreateUnbounded<bool>();
-    private string? _lastJson;
 
-    public CacheService(ServerSettings settings, ILogger<CacheService> logger)
+    public CacheService(ServerSettings settings, FileListCache cache, ILogger<CacheService> logger)
     {
         _settings = settings;
+        _cache = cache;
         _logger = logger;
         _builder = new FileListBuilder(new FileSystem(), settings.FilesDirectory,
             TimeSpan.FromSeconds(settings.FileSettleTime), TimeProvider.System);
@@ -125,17 +138,13 @@ public class CacheService : BackgroundService
                 _logger.LogInformation("Waiting for {Count} file(s) still being written, e.g. {File}", result.Skipped.Count, result.Skipped[0]);
 
             var json = JsonSerializer.Serialize(result.Entries);
-            if (json == _lastJson)
+            if (json == _cache.Json)
             {
                 _logger.LogDebug("File list unchanged ({Count} files)", result.Entries.Count);
                 return result.Skipped.Count > 0;
             }
 
-            //Write to a temp file then rename, so clients never read a half-written list
-            var tempFile = _settings.CacheFileName + ".tmp";
-            await File.WriteAllTextAsync(tempFile, json, cancellationToken);
-            File.Move(tempFile, _settings.CacheFileName, overwrite: true);
-            _lastJson = json;
+            _cache.Json = json;
 
             _logger.LogInformation("File list updated: {Count} files, {Hashed} hashed", result.Entries.Count, result.Hashed);
             return result.Skipped.Count > 0;

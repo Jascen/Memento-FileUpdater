@@ -15,28 +15,48 @@ public class UpdateServerException(UpdateError error, string message, Exception?
 public class FileServerClient
 {
     private const int BufferSize = 81920;
-    private readonly string _baseUrl;
+    private readonly string _baseUrl; //Without a trailing slash
+    private readonly bool _secure;
+    private readonly Func<bool> _allowInsecure;
     private readonly LocalFiles _localFiles;
     private readonly HttpClient _listClient;
     private readonly HttpClient _downloadClient;
 
-    //handler lets tests supply a fake server
-    public FileServerClient(string baseUrl, LocalFiles localFiles, HttpMessageHandler? handler = null)
+    //handler lets tests supply a fake server. allowInsecure is asked before each request, so the player's
+    //"Allow insecure downloads" setting takes effect without restarting
+    public FileServerClient(string baseUrl, LocalFiles localFiles, HttpMessageHandler? handler = null, Func<bool>? allowInsecure = null)
     {
-        _baseUrl = baseUrl;
+        _baseUrl = baseUrl.TrimEnd('/');
+        _secure = IsSecure(baseUrl);
+        _allowInsecure = allowInsecure ?? (() => false);
         _localFiles = localFiles;
         handler ??= new SocketsHttpHandler();
         _listClient = new HttpClient(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(5) }; //Initial connection
         _downloadClient = new HttpClient(handler, disposeHandler: false) { Timeout = TimeSpan.FromMinutes(15) }; //Download timeout
     }
 
+    //The file list and the files are only protected by the connection, so it has to be https.
+    //Plain http is accepted for a server on this machine, which nobody else can get in between,
+    //and for any server once the player has chosen to allow insecure downloads
+    public static bool IsSecure(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback));
+
+    private void EnsureSecure()
+    {
+        if (!_secure && !_allowInsecure())
+            throw new UpdateServerException(UpdateError.InsecureServer, $"{_baseUrl} is not an https address.");
+    }
+
     //Returns the server's files, skipping malformed entries and names that would land outside installPath
     public async Task<List<FileEntry>> GetFileListAsync(string installPath, CancellationToken cancellationToken)
     {
+        EnsureSecure();
+
         HttpResponseMessage response;
         try
         {
-            response = await _listClient.GetAsync(new Uri(_baseUrl), cancellationToken);
+            response = await _listClient.GetAsync(new Uri(_baseUrl + "/"), cancellationToken);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
@@ -95,7 +115,7 @@ public class FileServerClient
         CancellationToken cancellationToken) =>
         DownloadAsync(FileUrl(file.Name), file.Name, file.Size, file.Md5, _localFiles.ComputeMd5, filePath, onBytes, cancellationToken);
 
-    //Same for a launcher or client package, checked against the SHA-256 in the signed manifest
+    //Same for a launcher or TazUO package, checked against the SHA-256 in the signed manifest
     public Task DownloadPackageAsync(PackageEntry package, string filePath, Action<int, long, long?> onBytes,
         CancellationToken cancellationToken)
     {
@@ -110,6 +130,8 @@ public class FileServerClient
     private async Task DownloadAsync(Uri url, string name, long? expectedSize, string expectedHash, Func<string, string> computeHash,
         string filePath, Action<int, long, long?> onBytes, CancellationToken cancellationToken)
     {
+        EnsureSecure();
+
         var tempPath = filePath + ".part";
         long resumeFrom = _localFiles.Exists(tempPath) ? _localFiles.Length(tempPath) : 0;
         if (resumeFrom > 0 && resumeFrom == expectedSize)
@@ -173,6 +195,8 @@ public class FileServerClient
     //Null when the server hosts no packages. Anything else wrong throws UpdateServerException, so nothing unsigned is ever acted on
     public async Task<PackageManifest?> GetPackageManifestAsync(IReadOnlyCollection<string> trustedKeys, CancellationToken cancellationToken)
     {
+        EnsureSecure();
+
         var manifest = await GetBytesAsync(PackageManifest.ManifestFileName, cancellationToken);
         if (manifest == null) return null;
 
@@ -209,7 +233,7 @@ public class FileServerClient
         }
     }
 
-    private Uri PackageUrl(string path) => new(_baseUrl.TrimEnd('/') + "/packages/" + path);
+    private Uri PackageUrl(string path) => new(_baseUrl + "/packages/" + path);
 
     //Escapes each part of the name so files with spaces, # or ? in their names download correctly
     private Uri FileUrl(string name) =>

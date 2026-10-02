@@ -8,7 +8,7 @@ namespace FileUpdaterPackages;
 public static class PackageRole
 {
     public const string Launcher = "launcher"; //The thin updater players run
-    public const string Client = "client"; //The TazUO launcher and client
+    public const string TazUO = "tazuo"; //The TazUO launcher and client
 }
 
 //One downloadable package. File is the zip's name inside the packages folder, Sha256 is lowercase hex
@@ -37,10 +37,10 @@ public record PackageManifest(DateTimeOffset Generated, List<PackageEntry> Packa
         ?? throw new InvalidDataException("Manifest was empty.");
 }
 
-//Packages are named {role}-{version}.{rid}.zip, e.g. launcher-1.2.0.win-x64.zip or client-3.4.0.win-x64.zip
+//Packages are named {role}-{version}.{rid}.zip, e.g. launcher-1.2.0.win-x64.zip or tazuo-3.4.0.win-x64.zip
 public static partial class PackageFileName
 {
-    [GeneratedRegex(@"^(?<role>launcher|client)-(?<version>\d+(?:\.\d+){1,3})\.(?<rid>[a-z][a-z0-9-]*)\.zip$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?<role>launcher|tazuo)-(?<version>\d+(?:\.\d+){1,3})\.(?<rid>[a-z][a-z0-9-]*)\.zip$", RegexOptions.IgnoreCase)]
     private static partial Regex Pattern();
 
     public static bool TryParse(string fileName, out string role, out Version version, out string rid)

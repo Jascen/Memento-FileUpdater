@@ -2,11 +2,17 @@ using FileUpdaterPackages;
 using FileUpdaterServer;
 using Microsoft.AspNetCore.ResponseCompression;
 
-var builder = WebApplication.CreateBuilder(args);
+// appsettings.json is read from next to the server, wherever it is started from
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = AppContext.BaseDirectory,
+});
 
-// Load configuration from settings.ini
-var configProvider = new IniConfigProvider("settings.ini");
-var settings = configProvider.LoadSettings();
+// Every section of FileUpdater fills the same settings. A misspelled setting stops the server instead of being ignored
+var settings = new ServerSettings();
+foreach (var section in builder.Configuration.GetSection("FileUpdater").GetChildren())
+    section.Bind(settings, options => options.ErrorOnUnknownConfiguration = true);
 
 // Resolve relative paths to be relative to executable location, not current working directory
 var exeDirectory = AppContext.BaseDirectory;
@@ -18,18 +24,20 @@ if (!Path.IsPathRooted(settings.PackagesDirectory))
 {
     settings.PackagesDirectory = Path.GetFullPath(Path.Combine(exeDirectory, settings.PackagesDirectory));
 }
-if (!Path.IsPathRooted(settings.CacheFileName))
-{
-    settings.CacheFileName = Path.GetFullPath(Path.Combine(exeDirectory, settings.CacheFileName));
-}
 if (!string.IsNullOrEmpty(settings.LogFilePath) && !Path.IsPathRooted(settings.LogFilePath))
 {
     settings.LogFilePath = Path.GetFullPath(Path.Combine(exeDirectory, settings.LogFilePath));
 }
 
-// Configure Kestrel server
+// Configure Kestrel server. Endpoints in a Kestrel section (e.g. https with a certificate) take the place of Port and Hostname
+var kestrelEndpoints = builder.Configuration.GetSection("Kestrel:Endpoints").Exists();
 builder.WebHost.ConfigureKestrel(options =>
 {
+    if (kestrelEndpoints)
+    {
+        return;
+    }
+
     if (string.IsNullOrEmpty(settings.Hostname))
     {
         options.ListenAnyIP(settings.Port);
@@ -42,6 +50,7 @@ builder.WebHost.ConfigureKestrel(options =>
 
 // Add services
 builder.Services.AddSingleton(settings);
+builder.Services.AddSingleton<FileListCache>();
 builder.Services.AddHostedService<CacheService>();
 
 // Configure CORS
@@ -109,19 +118,6 @@ if (settings.EnableCompression)
     app.UseResponseCompression();
 }
 
-// Path normalization middleware - handle double slashes from client URLs
-app.Use(async (context, next) =>
-{
-    var path = context.Request.Path.Value;
-    if (path != null && path.Contains("//"))
-    {
-        // Replace consecutive slashes with a single slash
-        var normalizedPath = System.Text.RegularExpressions.Regex.Replace(path, "/+", "/");
-        context.Request.Path = normalizedPath;
-    }
-    await next();
-});
-
 // Request logging middleware
 if (settings.EnableRequestLogging)
 {
@@ -144,82 +140,57 @@ var downloadSemaphore = settings.MaxConcurrentDownloads > 0
 var fileHandler = new FileRequestHandler(settings, downloadSemaphore,
     app.Services.GetRequiredService<ILogger<FileRequestHandler>>());
 
-// File download middleware - handle /file/* requests (game files)
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.StartsWithSegments("/file", out var remaining))
-    {
-        await fileHandler.HandleAsync(context, settings.FilesDirectory, remaining.Value?.TrimStart('/') ?? "");
-        return;
-    }
+// Game files: GET /file/{path}
+app.MapGet("/file/{**path}", (HttpContext context, string path) =>
+    fileHandler.HandleAsync(context, settings.FilesDirectory, path));
 
-    await next();
+// Launcher and TazUO packages. manifest.json and manifest.sig are made and signed offline by the PackageSigner tool,
+// the server only hands them out. They are always fetched fresh, a stale manifest would hide a new release
+app.MapGet("/packages/" + PackageManifest.ManifestFileName, (HttpContext context) =>
+{
+    context.Response.Headers.CacheControl = "no-cache";
+    return fileHandler.HandleAsync(context, settings.PackagesDirectory, PackageManifest.ManifestFileName, "application/json");
 });
 
-// Package middleware - handle /packages/* requests (launcher and client packages).
-// manifest.json and manifest.sig are made and signed offline by the PackageSigner tool, the server only hands them out
-app.Use(async (context, next) =>
+app.MapGet("/packages/" + PackageManifest.SignatureFileName, (HttpContext context) =>
 {
-    if (context.Request.Path.StartsWithSegments("/packages", out var remaining))
-    {
-        var name = remaining.Value?.TrimStart('/') ?? "";
-        if (name is PackageManifest.ManifestFileName or PackageManifest.SignatureFileName)
-        {
-            //Always fetched fresh, a stale manifest would hide a new release
-            context.Response.Headers.CacheControl = "no-cache";
-            await fileHandler.HandleAsync(context, settings.PackagesDirectory, name,
-                name == PackageManifest.ManifestFileName ? "application/json" : "text/plain");
-        }
-        else if (name.StartsWith("file/") && !name["file/".Length..].Contains('/'))
-        {
-            //Packages sit directly in the packages folder, no subfolders
-            await fileHandler.HandleAsync(context, settings.PackagesDirectory, name["file/".Length..]);
-        }
-        else
-        {
-            context.Response.StatusCode = 404;
-        }
-        return;
-    }
-
-    await next();
+    context.Response.Headers.CacheControl = "no-cache";
+    return fileHandler.HandleAsync(context, settings.PackagesDirectory, PackageManifest.SignatureFileName, "text/plain");
 });
+
+// Packages sit directly in the packages folder, no subfolders
+app.MapGet("/packages/file/{name}", (HttpContext context, string name) =>
+    fileHandler.HandleAsync(context, settings.PackagesDirectory, name));
 
 // Test endpoint
 app.MapGet("/test", () => "Server is working!");
 
-// Endpoint 1: GET / - Return cached file list JSON
-app.MapGet("/", async (HttpContext context, ServerSettings settings, ILogger<Program> logger) =>
+// GET / - the file list JSON, kept in memory by CacheService
+app.MapGet("/", (HttpContext context, FileListCache cache) =>
 {
-    var cacheFile = settings.CacheFileName;
-
-    if (!File.Exists(cacheFile))
-    {
-        logger.LogWarning("Cache file not found, returning empty array");
-        return Results.Json(Array.Empty<object>());
-    }
-
-    try
-    {
-        var json = await File.ReadAllTextAsync(cacheFile);
+    if (cache.Json is { } json)
         return Results.Content(json, "application/json");
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Error reading cache file");
-        return Results.Problem("Error reading file list");
-    }
+
+    //Still hashing the files directory after a start
+    context.Response.Headers.RetryAfter = "5";
+    return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
 });
 
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 logger.LogInformation("========================================");
 logger.LogInformation("SimpleFileUpdater Server Starting");
 logger.LogInformation("========================================");
-logger.LogInformation("Port: {Port}", settings.Port);
-logger.LogInformation("Hostname: {Hostname}", string.IsNullOrEmpty(settings.Hostname) ? "All interfaces" : settings.Hostname);
+if (kestrelEndpoints)
+{
+    logger.LogInformation("Listening on the endpoints in the Kestrel section");
+}
+else
+{
+    logger.LogInformation("Port: {Port}", settings.Port);
+    logger.LogInformation("Hostname: {Hostname}", string.IsNullOrEmpty(settings.Hostname) ? "All interfaces" : settings.Hostname);
+}
 logger.LogInformation("Files directory: {Dir}", Path.GetFullPath(settings.FilesDirectory));
 logger.LogInformation("Packages directory: {Dir}", settings.PackagesDirectory);
-logger.LogInformation("Cache file: {Cache}", settings.CacheFileName);
 logger.LogInformation("Watch files directory: {Enabled}", settings.WatchFilesDirectory);
 logger.LogInformation("Cache interval: {Interval} seconds", settings.CacheRegenerationInterval);
 if (!string.IsNullOrEmpty(settings.LogFilePath))

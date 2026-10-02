@@ -13,6 +13,7 @@ public class Preferences
 
     public bool VerifyOnLaunch { get; set; } = true;
     public bool WarnIfNotVerified { get; set; } = true;
+    public bool AllowInsecureDownloads { get; set; } //Lets the launcher use an update address that isn't https
 
     public static void Load()
     {

@@ -15,6 +15,8 @@ public class FakeServer : HttpMessageHandler
     public string? RawList { get; set; }
     public bool IncludeSizes { get; set; } //Adds "size" to the file list, like newer servers
     public List<string> Downloads { get; } = new();
+    public List<string> FilePaths { get; } = new(); //The path of each file download exactly as it was requested
+    public int Requests { get; private set; }
     public List<long?> RangeStarts { get; } = new(); //Start of each download's Range header, null when it asked for the whole file
 
     private readonly Dictionary<string, byte[]> _packageFiles = new();
@@ -63,6 +65,7 @@ public class FakeServer : HttpMessageHandler
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        Requests++;
         var path = Uri.UnescapeDataString(request.RequestUri!.AbsolutePath).TrimStart('/');
         if (path.StartsWith("packages/")) return Task.FromResult(ServePackage(path["packages/".Length..]));
         if (path == string.Empty)
@@ -79,6 +82,7 @@ public class FakeServer : HttpMessageHandler
 
         var name = path.Replace("file/", string.Empty).TrimStart('/');
         Downloads.Add(name);
+        FilePaths.Add(Uri.UnescapeDataString(request.RequestUri.AbsolutePath));
         if (FailuresBeforeSuccess > 0)
         {
             FailuresBeforeSuccess--;

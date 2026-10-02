@@ -15,9 +15,11 @@ public static class LauncherConfig
     public static SolidColorBrush DefaultTextColor = SolidColorBrush.Parse("#F2F2F2");
     public static SolidColorBrush ProgressBarBackground = SolidColorBrush.Parse("#1A1512");
 
+    //Must be https, except for a server on this machine (localhost). Any other http address only works for
+    //players who turn on "Allow insecure downloads" in Settings
     public const string UpdateUrl = "http://127.0.0.1:8080/";
 
-    //Public keys (base64, printed by `PackageSigner keygen`) whose signature the server's launcher and client packages must carry.
+    //Public keys (base64, printed by `PackageSigner keygen`) whose signature the server's launcher and TazUO packages must carry.
     //Several can be listed so a key can be replaced without stranding old installs. While this is empty the launcher only
     //updates game files: it installs and runs nothing it downloaded, so the TazUO launcher can't be installed either
     public static readonly string[] TrustedPublicKeys = [];

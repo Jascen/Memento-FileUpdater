@@ -1,9 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
   </PropertyGroup>
@@ -13,13 +10,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../PackageManifest/PackageManifest.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Update="settings.ini">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <!-- The tests build this project framework-dependent; without this the library would be built a second time
+         with their settings, racing the first build for the same output files -->
+    <ProjectReference Include="../PackageManifest/PackageManifest.csproj" GlobalPropertiesToRemove="SelfContained;RuntimeIdentifier;PublishSingleFile" />
   </ItemGroup>
 
 </Project>

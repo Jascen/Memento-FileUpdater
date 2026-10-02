@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using FileUpdaterClient.Config;
 using FileUpdaterClient.Updating;
 
@@ -11,7 +12,7 @@ public class PackageState : IPackageState
     private static readonly string StatePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), LauncherConfig.AppDataFolder, "packages.json");
 
-    public Version? ClientVersion
+    public Version? TazUOVersion
     {
         get
         {
@@ -19,7 +20,7 @@ public class PackageState : IPackageState
             {
                 if (!File.Exists(StatePath)) return null;
                 var saved = JsonSerializer.Deserialize<SavedState>(File.ReadAllText(StatePath));
-                return Version.TryParse(saved?.ClientVersion, out var version) ? version : null;
+                return Version.TryParse(saved?.TazUOVersion, out var version) ? version : null;
             }
             catch (Exception e)
             {
@@ -29,22 +30,23 @@ public class PackageState : IPackageState
         }
     }
 
-    public void SetClientVersion(Version version)
+    public void SetTazUOVersion(Version version)
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(StatePath)!);
-            File.WriteAllText(StatePath, JsonSerializer.Serialize(new SavedState { ClientVersion = version.ToString() }));
+            File.WriteAllText(StatePath, JsonSerializer.Serialize(new SavedState { TazUOVersion = version.ToString() }));
         }
         catch (Exception e)
         {
-            //The client is installed either way, it just gets reinstalled next time
+            //It is installed either way, it just gets reinstalled next time
             Console.WriteLine($"Failed to save {StatePath}: {e.Message}");
         }
     }
 
     private class SavedState
     {
-        public string ClientVersion { get; set; } = string.Empty;
+        [JsonPropertyName("ClientVersion")] //The name it was first saved under
+        public string TazUOVersion { get; set; } = string.Empty;
     }
 }

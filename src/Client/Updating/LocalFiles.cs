@@ -1,10 +1,11 @@
 using System.IO.Abstractions;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 
 namespace FileUpdaterClient.Updating;
 
 //File system helpers for the install folder. Goes through IFileSystem so tests can use an in-memory one
-public class LocalFiles(IFileSystem fileSystem)
+public partial class LocalFiles(IFileSystem fileSystem)
 {
     //Resolves a server-provided file name to a local path, rejecting any name that would land outside the install folder
     public static bool TryGetLocalPath(string installPath, string name, out string fullPath)
@@ -14,6 +15,34 @@ public class LocalFiles(IFileSystem fileSystem)
         var root = Path.TrimEndingDirectorySeparator(baseDirectory) + Path.DirectorySeparatorChar;
         return fullPath.StartsWith(root, OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase);
     }
+
+    //True when a server-provided name is, or is inside, one of reservedPaths (relative to the install folder).
+    //Reserved paths belong to something other than the file list, like the folder a signed package is installed into,
+    //so the file list must not write there. Case is ignored on every platform, to err on the side of refusing
+    public static bool IsReserved(string installPath, string name, IEnumerable<string> reservedPaths)
+    {
+        if (OperatingSystem.IsWindows() && IsWindowsAlias(name)) return true;
+        if (!TryGetLocalPath(installPath, name, out var fullPath)) return true;
+
+        var baseDirectory = Path.GetFullPath(installPath);
+        foreach (var reserved in reservedPaths)
+        {
+            var reservedPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(reserved, baseDirectory));
+            if (fullPath.Equals(reservedPath, StringComparison.OrdinalIgnoreCase)
+                || fullPath.StartsWith(reservedPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    //Windows opens the same file under other spellings: a stream suffix (name::$DATA, folder::$INDEX_ALLOCATION)
+    //or an 8.3 short name (TAZUOL~1). Neither is a name a server has a reason to list, and either could reach a reserved path
+    public static bool IsWindowsAlias(string name) =>
+        name.Contains(':') || name.Split('/', '\\').Any(segment => ShortName().IsMatch(segment));
+
+    [GeneratedRegex(@"^[^.]{1,6}~\d{1,6}(\.[^.]{0,3})?$")]
+    private static partial Regex ShortName();
 
     public bool Exists(string fileName) => fileSystem.File.Exists(fileName);
 

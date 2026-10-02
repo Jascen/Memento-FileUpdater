@@ -9,8 +9,7 @@ public class ServerSettings
 
     // Files section
     public string FilesDirectory { get; set; } = "./files/";
-    public string PackagesDirectory { get; set; } = "./packages/"; // launcher and client packages, plus their signed manifest
-    public string CacheFileName { get; set; } = "jsoncache.json";
+    public string PackagesDirectory { get; set; } = "./packages/"; // launcher and TazUO packages, plus their signed manifest
     public int CacheRegenerationInterval { get; set; } = 3600;
     public bool WatchFilesDirectory { get; set; } = true;
     public int FileSettleTime { get; set; } = 5; // seconds a file must go unmodified before it is published
