@@ -54,4 +54,11 @@ public static class Strings
     public const string UnverifiedMessage = "The status of your game files is unknown. They may be missing or out of date, which can cause problems in game.";
     public const string PlayAnyway = "Play anyway";
     public const string CancelText = "Cancel";
+    public const string OkText = "OK";
+
+    //The ignore list (Settings, saved as .launcherignore in the install folder)
+    public const string IgnoredSkipped = "{0} file(s) or folder(s) skipped because they are ignored."; //{0} = number of files and folders
+    public const string ShowIgnored = "Show";
+    public const string IgnoredTitle = "Ignored files";
+    public const string IgnoredListIntro = "These are on the server but match your ignore list in Settings, so they are never downloaded:";
 }

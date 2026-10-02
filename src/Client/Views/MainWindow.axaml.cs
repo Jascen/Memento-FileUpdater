@@ -35,6 +35,9 @@ public partial class MainWindow : Window, IMainView
     public Task<bool> ConfirmAsync(string title, string message, string confirmText, string cancelText) =>
         ShowModal(new ConfirmDialog(title, message, confirmText, cancelText).ShowDialog<bool>(this));
 
+    public Task ShowMessageAsync(string title, string message) =>
+        ShowModal(new ConfirmDialog(title, message, Strings.OkText, cancelText: string.Empty).ShowDialog<bool>(this));
+
     public void OpenUrl(Uri uri) => _ = Launcher.LaunchUriAsync(uri);
 
     public void ShutdownForRestart() =>
@@ -78,6 +81,8 @@ public partial class MainWindow : Window, IMainView
     private void Cancel_Click(object? sender, RoutedEventArgs e) => _viewModel.CancelUpdate();
 
     private async void Retry_Click(object? sender, RoutedEventArgs e) => await _viewModel.RetryAsync();
+
+    private async void ShowIgnored_Click(object? sender, RoutedEventArgs e) => await _viewModel.ShowIgnoredAsync();
 
     private void Minimize_Click(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 

@@ -45,6 +45,15 @@
                 <TextBlock Name="FolderErrorText" FontSize="12" Foreground="#FF6B5E" TextWrapping="Wrap" IsVisible="False" />
             </StackPanel>
 
+            <StackPanel Spacing="6">
+                <TextBlock Text="Ignored Files" FontSize="14" FontWeight="SemiBold" Foreground="#E8DCC0" />
+                <TextBlock FontSize="12" Foreground="#CDBB92" TextWrapping="Wrap"
+                           Text="Files and folders never to download, one per line, written like a .gitignore. For example map0.mul, Music/ or *.cfg" />
+                <TextBox Name="IgnoreText" AcceptsReturn="True" TextWrapping="NoWrap" Height="96" FontSize="12"
+                         FontFamily="Consolas,Menlo,monospace" Background="#0F0C0A" Foreground="#E8DCC0"
+                         BorderBrush="#5A4630" Watermark="# Nothing ignored" />
+            </StackPanel>
+
             <CheckBox Content="Attempt to verify files on launch" IsChecked="{Binding VerifyOnLaunch}" />
             <CheckBox Content="Warn when trying to play if verification fails" IsChecked="{Binding WarnIfNotVerified}"
                       IsVisible="{x:Static config:TazUOLauncherConfig.Enabled}" />

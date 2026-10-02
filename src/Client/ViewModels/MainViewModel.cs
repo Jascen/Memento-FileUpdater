@@ -28,6 +28,8 @@ public class MainViewModel : INotifyPropertyChanged
     private bool _launcherUpdateAvailable;
     private string _launcherUpdateText = string.Empty;
     private string? _dismissedLauncherVersion; //A launcher version the player chose "Not now" for, hidden until the launcher restarts
+    private bool _checkAskedFor; //Whether the player asked for the last check (Verify or Retry), rather than it running on launch
+    private IReadOnlyList<string> _ignoredItems = [];
     public event PropertyChangedEventHandler? PropertyChanged;
 
     //openFolder builds what belongs to an install folder, and is called again whenever the player picks another one
@@ -93,6 +95,22 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     public string RetryText => Strings.RetryText;
+    public string ShowIgnoredText => Strings.ShowIgnored;
+
+    /// <summary>Server files and folders the last run skipped because the player's ignore list covers them.</summary>
+    public IReadOnlyList<string> IgnoredItems
+    {
+        get => _ignoredItems;
+        private set
+        {
+            if (!SetField(ref _ignoredItems, value)) return;
+            OnPropertyChanged(nameof(IgnoredMessage));
+            OnPropertyChanged(nameof(HasIgnoredItems));
+        }
+    }
+
+    public bool HasIgnoredItems => IgnoredItems.Count > 0;
+    public string IgnoredMessage => HasIgnoredItems ? string.Format(Strings.IgnoredSkipped, IgnoredItems.Count) : string.Empty;
 
     /// <summary>Overall progress across all files (top bar), 0-100.</summary>
     public double Progress
@@ -262,7 +280,7 @@ public class MainViewModel : INotifyPropertyChanged
             ErrorMessage = Strings.PackagesNotConfigured;
 
         if (_settings.Preferences.VerifyOnLaunch)
-            await CheckForUpdatesAsync();
+            await RunCheckAsync(askedFor: false);
         else
             ProgressText = Strings.NotVerified;
     }
@@ -272,17 +290,23 @@ public class MainViewModel : INotifyPropertyChanged
     {
         State = LauncherState.Working;
         ErrorMessage = string.Empty;
+        IgnoredItems = [];
         Progress = 0;
         FileProgress = 0;
         FileProgressText = string.Empty;
     }
 
-    public async Task<UpdateResult?> CheckForUpdatesAsync()
+    //A check the player asked for, with the Verify link or Retry
+    public Task<UpdateResult?> CheckForUpdatesAsync() => RunCheckAsync(askedFor: true);
+
+    //askedFor is false for the check on launch, whose updates are only offered while verifying on launch is turned on
+    private async Task<UpdateResult?> RunCheckAsync(bool askedFor)
     {
         var session = _session;
         if (session == null || IsUpdating) return null; //No folder yet, or already busy
 
         BeginRun();
+        _checkAskedFor = askedFor;
         var result = await session.Updates.CheckAsync();
         if (session != _session) return null; //The folder changed meanwhile, so this result is stale
         await _ui.InvokeAsync(() => ShowResult(result, wasDownload: false)); //Queued behind any progress still waiting to be shown
@@ -351,7 +375,11 @@ public class MainViewModel : INotifyPropertyChanged
         if (_view == null) return;
 
         var newFolder = await _view.ShowSettingsAsync(folderError);
-        if (newFolder == null) return;
+        if (newFolder == null)
+        {
+            ForgetUnaskedUpdates();
+            return;
+        }
 
         if (!_settings.TrySetInstallPath(newFolder, out var error))
         {
@@ -361,6 +389,26 @@ public class MainViewModel : INotifyPropertyChanged
 
         _session?.Updates.Cancel(); //Stop anything still working in the old folder
         await StartWithFolderAsync();
+    }
+
+    //With verifying on launch turned off, updates are only offered when the player asked for the check. So turning it off
+    //takes back a download the launch check offered
+    private void ForgetUnaskedUpdates()
+    {
+        if (_settings.Preferences.VerifyOnLaunch || _checkAskedFor || State != LauncherState.UpdatesReady) return;
+
+        State = LauncherState.Idle;
+        Progress = 0;
+        ProgressText = Strings.NotVerified;
+    }
+
+    //Lists what the ignore list kept from being downloaded
+    public async Task ShowIgnoredAsync()
+    {
+        if (_view == null || !HasIgnoredItems) return;
+
+        await _view.ShowMessageAsync(Strings.IgnoredTitle,
+            Strings.IgnoredListIntro + Environment.NewLine + Environment.NewLine + string.Join(Environment.NewLine, IgnoredItems));
     }
 
     public void CancelUpdate()
@@ -456,6 +504,7 @@ public class MainViewModel : INotifyPropertyChanged
         }
 
         TazUOInstalled = _session?.TazUO?.IsInstalled ?? false;
+        IgnoredItems = result is UpdateResult.Failed or UpdateResult.Cancelled ? [] : _session?.Updates.IgnoredItems ?? [];
     }
 
     protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)

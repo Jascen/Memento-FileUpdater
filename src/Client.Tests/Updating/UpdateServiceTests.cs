@@ -248,6 +248,83 @@ public class UpdateServiceTests
     }
 
     [Fact]
+    public async Task IgnoredFilesAndFoldersAreNeverDownloaded()
+    {
+        //Arrange
+        _server.Add("map0.mul", "new");
+        _server.Add("map1.mul", "new");
+        _server.Add("Music/a.mp3", "new");
+        _server.Add("Music/b.mp3", "new");
+        WriteLocal("map0.mul", "my own edit");
+        WriteLocal(IgnoreRules.FileName, "map0.mul\nMusic/\n");
+        var service = CreateService();
+        await service.CheckAsync();
+
+        //Act
+        var result = await service.DownloadAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result);
+        Assert.True(service.FilesVerified); //Ignoring is the player's choice, not a failure
+        Assert.Equal(["map1.mul"], _server.Downloads);
+        Assert.Equal("my own edit", ReadLocal("map0.mul"));
+        Assert.Equal(["map0.mul", "Music/"], service.IgnoredItems); //The folder counts once
+    }
+
+    [Fact]
+    public async Task AChangedFileThatIsIgnoredDoesntCountAsAnUpdate()
+    {
+        //Arrange
+        _server.Add("map0.mul", "new");
+        WriteLocal("map0.mul", "my own edit");
+        WriteLocal(IgnoreRules.FileName, "map0.mul");
+        var service = CreateService();
+
+        //Act
+        var result = await service.CheckAsync();
+
+        //Assert
+        Assert.Equal(UpdateResult.Finished, result);
+        Assert.Equal(["map0.mul"], service.IgnoredItems);
+    }
+
+    [Fact]
+    public async Task AFileIgnoredAfterTheCheckIsntDownloaded()
+    {
+        //Arrange
+        _server.Add("map0.mul", "new");
+        _server.Add("map1.mul", "new");
+        var service = CreateService();
+        await service.CheckAsync();
+        WriteLocal(IgnoreRules.FileName, "map0.mul"); //Added in Settings before clicking Download
+
+        //Act
+        await service.DownloadAsync();
+
+        //Assert
+        Assert.Equal(["map1.mul"], _server.Downloads);
+        Assert.Equal(["map0.mul"], service.IgnoredItems);
+    }
+
+    [Fact]
+    public async Task TheServerCantReplaceThePlayersIgnoreList()
+    {
+        //Arrange
+        _server.Add(IgnoreRules.FileName, "");
+        _server.Add("map0.mul", "new");
+        WriteLocal(IgnoreRules.FileName, "map0.mul");
+        var service = CreateService();
+        await service.CheckAsync();
+
+        //Act
+        await service.DownloadAsync();
+
+        //Assert
+        Assert.Empty(_server.Downloads);
+        Assert.Equal("map0.mul", ReadLocal(IgnoreRules.FileName));
+    }
+
+    [Fact]
     public async Task CheckReportsPackagesThatNeedUpdating()
     {
         //Arrange

@@ -51,6 +51,14 @@ public class FakeMainView : IMainView
         return Task.FromResult(ConfirmAnswer);
     }
 
+    public List<(string Title, string Message)> Messages { get; } = new();
+
+    public Task ShowMessageAsync(string title, string message)
+    {
+        Messages.Add((title, message));
+        return Task.CompletedTask;
+    }
+
     public void OpenUrl(Uri uri)
     {
     }

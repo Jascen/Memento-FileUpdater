@@ -239,6 +239,16 @@
             <!-- Progress: top bar = all files, bottom bar = current file -->
             <Grid Grid.Row="2" Height="170">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,34" Spacing="6">
+                    <!-- Files the player's ignore list kept from being downloaded -->
+                    <StackPanel Orientation="Horizontal" Width="520" Spacing="8" IsVisible="{Binding HasIgnoredItems}">
+                        <TextBlock Text="{Binding IgnoredMessage}" Foreground="#D9C9A3" FontSize="13" VerticalAlignment="Center">
+                            <TextBlock.Effect>
+                                <DropShadowEffect Color="Black" BlurRadius="4" OffsetX="0" OffsetY="1" Opacity="1" />
+                            </TextBlock.Effect>
+                        </TextBlock>
+                        <Button Classes="dialog secondary" Content="{Binding ShowIgnoredText}" Click="ShowIgnored_Click"
+                                MinWidth="0" Padding="12,2" FontSize="12" />
+                    </StackPanel>
                     <Grid ColumnDefinitions="*,Auto,Auto" Width="520">
                         <TextBlock Grid.Column="0" Text="{Binding ErrorMessage}" Foreground="#FF6B5E" FontSize="13"
                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"

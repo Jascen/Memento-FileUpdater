@@ -18,6 +18,7 @@ public partial class ConfirmDialog : Window
         MessageText.Text = message;
         ConfirmButton.Content = confirmText;
         CancelButton.Content = cancelText;
+        CancelButton.IsVisible = cancelText.Length > 0; //Just an OK button when there is nothing to cancel
     }
 
     private void Confirm_Click(object? sender, RoutedEventArgs e) => Close(true);

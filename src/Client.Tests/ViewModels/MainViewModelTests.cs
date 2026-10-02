@@ -257,6 +257,98 @@ public class MainViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task WithoutVerifyOnLaunchUpdatesAreOnlyOfferedAfterVerify()
+    {
+        //Arrange
+        _server.Add("a.mul", "new");
+        _settings.Preferences.VerifyOnLaunch = false;
+        var viewModel = CreateViewModel();
+        await viewModel.StartAsync(_view);
+        var beforeVerify = viewModel.MainButtonText;
+
+        //Act
+        await viewModel.OpenLinkAsync(new NavLink("Verify", NavLink.VerifyAction));
+
+        //Assert
+        Assert.Equal(Strings.PlayText, beforeVerify);
+        Assert.Equal(Strings.DownloadButton, viewModel.MainButtonText);
+    }
+
+    [Fact]
+    public async Task TurningOffVerifyOnLaunchTakesBackTheDownloadTheLaunchCheckOffered()
+    {
+        //Arrange
+        _server.Add("a.mul", "new");
+        var viewModel = CreateViewModel();
+        await viewModel.StartAsync(_view); //Verify on launch is on, so the check offers the download
+        _settings.Preferences.VerifyOnLaunch = false; //What saving the settings dialog does
+
+        //Act
+        await viewModel.OpenSettingsAsync();
+
+        //Assert
+        Assert.Equal(LauncherState.Idle, viewModel.State);
+        Assert.Equal(Strings.PlayText, viewModel.MainButtonText);
+        Assert.Equal(Strings.NotVerified, viewModel.ProgressText);
+    }
+
+    [Fact]
+    public async Task TurningOffVerifyOnLaunchKeepsADownloadTheVerifyLinkOffered()
+    {
+        //Arrange
+        _server.Add("a.mul", "new");
+        _settings.Preferences.VerifyOnLaunch = false;
+        var viewModel = CreateViewModel();
+        await viewModel.StartAsync(_view);
+        await viewModel.OpenLinkAsync(new NavLink("Verify", NavLink.VerifyAction));
+
+        //Act
+        await viewModel.OpenSettingsAsync();
+
+        //Assert
+        Assert.Equal(Strings.DownloadButton, viewModel.MainButtonText);
+    }
+
+    [Fact]
+    public async Task IgnoredFilesAreCountedAndCanBeListed()
+    {
+        //Arrange
+        _server.Add("map0.mul", "new");
+        _server.Add("Music/a.mp3", "new");
+        _server.Add("Music/b.mp3", "new");
+        WriteLocal(InstallPath, IgnoreRules.FileName, "map0.mul\nMusic/");
+        var viewModel = CreateViewModel();
+        await viewModel.StartAsync(_view);
+
+        //Act
+        await viewModel.ShowIgnoredAsync();
+
+        //Assert
+        Assert.Equal(LauncherState.Verified, viewModel.State);
+        Assert.True(viewModel.HasIgnoredItems);
+        Assert.Equal(string.Format(Strings.IgnoredSkipped, 2), viewModel.IgnoredMessage);
+        var (title, message) = Assert.Single(_view.Messages);
+        Assert.Equal(Strings.IgnoredTitle, title);
+        Assert.Contains("map0.mul", message);
+        Assert.Contains("Music/", message);
+    }
+
+    [Fact]
+    public async Task NothingIgnoredShowsNoMessage()
+    {
+        //Arrange
+        _server.Add("map0.mul", "new");
+        var viewModel = CreateViewModel();
+
+        //Act
+        await viewModel.StartAsync(_view);
+
+        //Assert
+        Assert.False(viewModel.HasIgnoredItems);
+        Assert.Empty(viewModel.IgnoredMessage);
+    }
+
+    [Fact]
     public async Task ANewerLauncherIsOfferedWithoutHoldingAnythingUp()
     {
         //Arrange

@@ -23,6 +23,8 @@ public class UpdateService
 
     private readonly ConcurrentQueue<FileEntry> _toCompare = new();
     private readonly ConcurrentQueue<FileEntry> _toDownload = new();
+    private List<FileEntry> _fileList = new(); //The server's list as last fetched, apart from reserved paths
+    private string[] _ignored = []; //Files and folders the player's ignore list covered in the last run
     private readonly Stopwatch _downloadClock = new(); //Wall-clock time of the download phase, shared by all workers
     private CancellationTokenSource _cancellation = new();
     private PackageUpdates _packageUpdates = PackageUpdates.None; //What the last check found out of date in the signed manifest
@@ -52,6 +54,10 @@ public class UpdateService
     //Files the last run couldn't download
     public IReadOnlyCollection<string> FailedFiles => _failedFiles.ToArray();
 
+    //Server files and folders the last run skipped because the player's ignore list covers them, sorted.
+    //A folder is listed once with a trailing /, however many of the server's files are in it
+    public IReadOnlyList<string> IgnoredItems => _ignored;
+
     //packages is null when the server hosts no packages for this launcher (no trusted signing key), so only files are updated.
     //keepLocalFiles are name patterns (e.g. "*.cfg") for files players change themselves: downloaded only when missing, never replaced.
     //reservedPaths are files or folders inside the install folder that the file list may never write to, like the folder
@@ -64,7 +70,7 @@ public class UpdateService
         _installPath = installPath;
         _packages = packages;
         _keepLocalFiles = keepLocalFiles ?? [];
-        _reservedPaths = [HashCache.FileName, .. reservedPaths ?? []];
+        _reservedPaths = [HashCache.FileName, IgnoreRules.FileName, .. reservedPaths ?? []];
         _hashes = new HashCache(localFiles, installPath);
     }
 
@@ -90,7 +96,15 @@ public class UpdateService
     //Installs the TazUO launcher if needed, then checks the files CheckAsync skipped and downloads everything that differs
     public Task<UpdateResult> DownloadAsync() => RunAsync(async token =>
     {
-        if (_needsFileList && !await LoadFileList(token)) return UpdateResult.Failed;
+        if (_needsFileList)
+        {
+            if (!await LoadFileList(token)) return UpdateResult.Failed;
+        }
+        else
+        {
+            ApplyIgnoreList(); //The player may have changed it since the check
+        }
+
         if (!await CheckPackages(token)) return UpdateResult.Failed;
 
         await ApplyPackages(token);
@@ -138,6 +152,7 @@ public class UpdateService
     {
         _toCompare.Clear();
         _toDownload.Clear();
+        _fileList = new List<FileEntry>();
         ProgressChanged?.Invoke(new UpdateProgress(UpdatePhase.RequestingFileList, 0, 0));
 
         try
@@ -150,6 +165,7 @@ public class UpdateService
                     continue;
                 }
 
+                _fileList.Add(file);
                 _toCompare.Enqueue(file);
             }
         }
@@ -160,9 +176,39 @@ public class UpdateService
             return false;
         }
 
+        ApplyIgnoreList();
         _compareTotal = _toCompare.Count;
         _needsFileList = false;
         return true;
+    }
+
+    //Reads the install folder's ignore list again and drops what it covers from the files still to compare or download.
+    //Ignored files are the player's choice, so they don't count against FilesVerified
+    private void ApplyIgnoreList()
+    {
+        var rules = IgnoreRules.None;
+        try
+        {
+            rules = IgnoreRules.Parse(_localFiles.ReadAllTextIfExists(IgnoreRules.PathIn(_installPath)));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Console.WriteLine($"Couldn't read {IgnoreRules.FileName}, nothing is ignored: {e.Message}");
+        }
+
+        _ignored = _fileList.Select(file => rules.Match(file.Name)).OfType<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (_ignored.Length == 0) return;
+
+        foreach (var queue in new[] { _toCompare, _toDownload })
+        {
+            var keep = queue.Where(file => rules.Match(file.Name) == null).ToList();
+            queue.Clear();
+            foreach (var file in keep)
+                queue.Enqueue(file);
+        }
+
+        Console.WriteLine($"Skipping {_ignored.Length} ignored file(s) or folder(s): {string.Join(", ", _ignored)}");
     }
 
     private async Task<UpdateResult> Finish(CancellationToken token)
