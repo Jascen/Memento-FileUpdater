@@ -39,6 +39,12 @@ public interface IClientInstaller
     void EnsureProfiles();
 }
 
+//The TazUO launcher as the player sees it: installed by PackageUpdater, then opened by the Play button
+public interface IGameClient : IClientInstaller
+{
+    void Start();
+}
+
 //Replaces the running launcher with the one in a downloaded, verified package and restarts into it
 public interface ISelfUpdater
 {
